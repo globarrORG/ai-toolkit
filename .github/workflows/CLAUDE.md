@@ -21,8 +21,8 @@ Contains GitHub Actions workflow definitions that automate CI/CD, code quality, 
 
 - `claude-code.yml` - Responds to @claude mentions in issues and PRs
 - `claude-code-review.yml` - Automated PR code reviews for **this** repository, via `@uniswap/review-cli`. Does not call `_claude-code-review.yml` (see [PR Code Review for this repository](#pr-code-review-for-this-repository-claude-code-reviewyml))
-- `claude-docs-check.yml` - Validates PR documentation is properly updated (CLAUDE.md, README, versions), forwards either Claude auth secret to `_claude-docs-check.yml`, and skips early when neither auth secret is configured
-- `generate-pr-title-description.yml` - Auto-generates PR titles and descriptions using Claude
+- `claude-docs-check.yml` - Validates PR documentation is properly updated (CLAUDE.md, README, versions), forwards either Claude auth secret to `_claude-docs-check.yml`, and uses a preflight auth check job to skip early when neither auth secret is configured
+- `generate-pr-title-description.yml` - Auto-generates PR titles and descriptions using Claude, with a preflight auth check that skips cleanly when neither Claude credential is configured
 
 ### PR Title Validation (1 workflow)
 
@@ -621,7 +621,7 @@ This workflow validates that PR documentation is properly updated based on code 
 | **Commit Suggestions**      | Provides GitHub commit suggestions users can apply with one click                    |
 | **Fixup Branch Creation**   | For larger changes, creates a fixup branch that can be merged into the PR            |
 | **Auto-Commit Mode**        | Optionally auto-commit and push all suggestions directly to the PR branch            |
-| **Pass/Fail Verdict**       | Returns clear pass/fail status for CI integration                                    |
+| **Pass/Fail/Skip Verdict**  | Returns clear pass/fail/skip status for CI integration                               |
 | **Auto-Fix Mode**           | Optionally auto-fix documentation issues and push changes (triggers re-check)        |
 | **Dual Authentication**     | Supports both API key and OAuth token authentication; skips if neither is configured |
 
@@ -636,10 +636,11 @@ This workflow validates that PR documentation is properly updated based on code 
 
 **Verdict Logic:**
 
-| Verdict  | When Returned                                                       |
-| -------- | ------------------------------------------------------------------- |
-| **PASS** | No issues found OR only info/minor severity suggestions             |
-| **FAIL** | Any error-level issues (e.g., plugin modified without version bump) |
+| Verdict  | When Returned                                                                                    |
+| -------- | ------------------------------------------------------------------------------------------------ |
+| **PASS** | No issues found OR only info/minor severity suggestions                                          |
+| **FAIL** | Any error-level issues (e.g., plugin modified without version bump)                              |
+| **SKIP** | Claude authentication is unavailable, so the reusable workflow skips validation and returns zeros |
 
 **Required Secrets:**
 
@@ -683,7 +684,7 @@ If both are provided, OAuth token takes precedence. A preflight job checks for e
 
 | Output             | Description                                         |
 | ------------------ | --------------------------------------------------- |
-| `verdict`          | PASS or FAIL                                        |
+| `verdict`          | PASS, FAIL, or SKIP                                 |
 | `suggestion_count` | Number of suggestions made                          |
 | `branch_name`      | Name of fixup branch (if created)                   |
 | `branch_url`       | URL to fixup branch (if created)                    |
