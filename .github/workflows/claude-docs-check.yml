@@ -72,6 +72,7 @@ jobs:
     # Skip bots and fork PRs (fork code is attacker-controlled)
     # workflow_dispatch fork check is handled inside _claude-docs-check.yml
     if: |
+      needs.check-authentication.outputs.has_auth == 'true' &&
       (
         github.event_name == 'workflow_dispatch' ||
         (
