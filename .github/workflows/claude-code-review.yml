@@ -242,7 +242,11 @@ jobs:
           # variables → Actions → Variables). 1.10.x is required for the
           # `model.synthesis` key in .claude/review.yml.
           version: ${{ vars.REVIEW_CLI_VERSION || '1.10.6' }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.REVIEW_CLI_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Skip when review-cli is unavailable
+        if: steps.install-review-cli.outputs.bin-path == ''
+        run: echo "::notice::Skipping AI review because @uniswap/review-cli could not be installed from GitHub Packages with the current token."
 
       # Forks and personal copies of this repository do not necessarily have
       # permission to read the private GitHub Packages release of
@@ -569,7 +573,7 @@ jobs:
         uses: ./.review-tooling/.github/actions/install_review_cli
         with:
           version: ${{ vars.REVIEW_CLI_VERSION || '1.10.6' }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.REVIEW_CLI_TOKEN || secrets.GITHUB_TOKEN }}
 
       # Fail loudly rather than silently degrading: without a token the
       # agent-query factory falls back to a mock and "reviews" nothing.
