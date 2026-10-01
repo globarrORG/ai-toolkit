@@ -25,8 +25,8 @@ jobs:
       is_automated: ${{ steps.check.outputs.is_automated }}
       category: ${{ steps.check.outputs.category }}
       skip_reason: ${{ steps.check.outputs.skip_reason }}
-      # Skip CI for release/sync/action-update PRs, but NOT for dependency updates (which need testing)
-      should_skip_ci: ${{ steps.check.outputs.is_automated == 'true' && steps.check.outputs.category != 'deps' }}
+      # Skip CI for release/sync/action-update PRs, but not dependency updates or Copilot PRs.
+      should_skip_ci: ${{ steps.check.outputs.is_automated == 'true' && steps.check.outputs.category != 'deps' && steps.check.outputs.category != 'copilot' }}
     steps:
       - uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
 
