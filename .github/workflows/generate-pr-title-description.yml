@@ -31,23 +31,39 @@ permissions:
   pull-requests: write
   id-token: write
 
-env:
-  HAS_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
-  HAS_CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
-
 jobs:
+  check-auth:
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      has_auth: ${{ steps.check.outputs.has_auth }}
+    steps:
+      - name: Check Claude authentication availability
+        id: check
+        env:
+          HAS_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+          HAS_CLAUDE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+        run: |
+          if [ "$HAS_ANTHROPIC_API_KEY" = "true" ] || [ "$HAS_CLAUDE_OAUTH_TOKEN" = "true" ]; then
+            echo "has_auth=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::No Claude authentication configured (ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN). Skipping PR metadata generation."
+            echo "has_auth=false" >> "$GITHUB_OUTPUT"
+          fi
+
   generate-metadata:
+    needs: check-auth
     # Skip conditions:
     # - Merge queue PRs (handled separately)
     # - Dependabot PRs (already have proper titles)
     # - Release PRs (have their own format)
     # - Production promotion PRs (have their own format)
     if: |
+      needs.check-auth.outputs.has_auth == 'true' &&
       !contains(github.head_ref, 'gh-readonly-queue/') &&
       !contains(github.head_ref, 'dependabot/') &&
       !contains(github.head_ref, 'release/') &&
-      !startsWith(github.event.pull_request.title, 'chore(release):') &&
-      (env.HAS_ANTHROPIC_API_KEY == 'true' || env.HAS_CLAUDE_CODE_OAUTH_TOKEN == 'true')
+      !startsWith(github.event.pull_request.title, 'chore(release):')
 
     uses: ./.github/workflows/_generate-pr-metadata.yml
     with:
