@@ -48,6 +48,7 @@ concurrency:
 
 jobs:
   check-authentication:
+    # Only check credentials for runs that would otherwise invoke the reusable workflow.
     if: |
       github.event_name == 'workflow_dispatch' ||
       (
@@ -58,23 +59,22 @@ jobs:
     runs-on: ubuntu-latest
     permissions: {}
     outputs:
-      has_auth: ${{ steps.auth.outputs.has_auth }}
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      has_auth: ${{ steps.check-auth.outputs.has_auth }}
     steps:
-      # v0.8.4
-      - uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3
+      - uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
 
-      - name: Check Claude authentication
-        id: auth
+      - name: Check Claude authentication availability
+        id: check-auth
         shell: bash
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
-          if [ -n "$ANTHROPIC_API_KEY$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+          if [[ -n "$ANTHROPIC_API_KEY" || -n "$CLAUDE_CODE_OAUTH_TOKEN" ]]; then
             echo "has_auth=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_auth=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping docs check: Claude auth is not configured."
+            echo "::notice::Skipping Claude docs check because neither Claude authentication secret is configured."
           fi
 
   docs-check:
