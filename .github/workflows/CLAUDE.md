@@ -608,6 +608,8 @@ This workflow validates that PR documentation is properly updated based on code 
 | **Auto-Fix Mode**           | Optionally auto-fix documentation issues and push changes (triggers re-check)      |
 | **Dual Authentication**     | Supports both API key and OAuth token authentication (OAuth takes precedence)      |
 
+The top-level `claude-docs-check.yml` checks for either Claude credential before invoking this reusable workflow. When neither secret is configured, it skips the Claude check instead of failing authentication validation.
+
 **Suggestion Modes:**
 
 | Mode      | Description                                                                              |
