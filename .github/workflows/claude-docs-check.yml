@@ -48,10 +48,36 @@ concurrency:
 
 jobs:
   check-authentication:
+    # Only run the auth preflight for workflow_dispatch or trusted same-repo PRs.
+    if: |
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event_name == 'pull_request' &&
+          !contains(github.event.pull_request.user.login, '[bot]') &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        )
+      )
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       has_auth: ${{ steps.check.outputs.has_auth }}
     steps:
+      # Security scanning — must be the first step in every non-macOS job.
+      - name: Security Scan
+        uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
+        with:
+          egress-policy: block
+          allowed-domains: |
+            release-assets.githubusercontent.com
+            raw.githubusercontent.com
+            api.anthropic.com
+            claude.ai
+            downloads.claude.ai
+            registry.npmjs.org
+          enable-sudo: false
+
       - name: Check authentication availability
         id: check
         env:
@@ -62,7 +88,7 @@ jobs:
             echo "has_auth=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_auth=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping PR documentation validation because Claude authentication is not available for this workflow run."
+            echo "::notice::Skipping PR documentation validation because no Claude authentication is configured."
           fi
 
   docs-check:
@@ -78,8 +104,7 @@ jobs:
           !contains(github.event.pull_request.user.login, '[bot]') &&
           github.event.pull_request.head.repo.full_name == github.repository
         )
-      ) &&
-      needs.check-authentication.outputs.has_auth == 'true'
+      )
     permissions:
       id-token: write
       contents: write
