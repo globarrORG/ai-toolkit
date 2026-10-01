@@ -638,13 +638,13 @@ This workflow validates that PR documentation is properly updated based on code 
 | **PASS** | No issues found OR only info/minor severity suggestions             |
 | **FAIL** | Any error-level issues (e.g., plugin modified without version bump) |
 
-**Required Secrets:**
+**Authentication Secrets:**
 
-| Secret                    | Required                                      | Description                                                                                                                               |
-| ------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`       | Yes (unless `CLAUDE_CODE_OAUTH_TOKEN` is set) | Anthropic API key for Claude access                                                                                                       |
-| `CLAUDE_CODE_OAUTH_TOKEN` | No (alternative to `ANTHROPIC_API_KEY`)       | Claude Code OAuth token for authentication. When provided, takes precedence over `ANTHROPIC_API_KEY`. Generate with `claude setup-token`. |
-| `WORKFLOW_PAT`            | No                                            | Personal Access Token with `repo` scope. Needed for fixup branch creation and auto-fix push access.                                       |
+| Secret                    | Required                                   | Description                                                                                                                               |
+| ------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`       | For the check, unless OAuth is configured  | Anthropic API key for Claude access                                                                                                       |
+| `CLAUDE_CODE_OAUTH_TOKEN` | For the check, if no API key is configured | Claude Code OAuth token for authentication. When provided, takes precedence over `ANTHROPIC_API_KEY`. Generate with `claude setup-token`. |
+| `WORKFLOW_PAT`            | No                                         | Personal Access Token with `repo` scope. Needed for fixup branch creation and auto-fix push access.                                       |
 
 **Authentication Methods:**
 
@@ -653,7 +653,7 @@ You can authenticate with Claude using either method:
 1. **API Key (Traditional):** Set `ANTHROPIC_API_KEY` with your Anthropic API key
 2. **OAuth Token (Pro/Max Users):** Set `CLAUDE_CODE_OAUTH_TOKEN` with a token generated via `claude setup-token`
 
-If both are provided, OAuth token takes precedence. At least one authentication method must be configured.
+If both are provided, OAuth token takes precedence. The caller skips the documentation check when neither authentication method is configured.
 
 > **Important:** The [Claude GitHub App](https://github.com/apps/claude) must be installed on your repository for these workflows to function. This is required by Anthropic's official Claude Code GitHub Action.
 
