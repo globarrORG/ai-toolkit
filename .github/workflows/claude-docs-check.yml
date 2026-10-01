@@ -47,38 +47,56 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Cheap pre-check so repos/environments without Claude credentials configured
-  # skip cleanly instead of invoking the reusable workflow and hard-failing in
-  # validate-claude-auth. Secrets can't be read in a job-level `if:`, so
-  # surface presence via job-level env and expose it as a job output instead.
-  check-auth:
+  check-authentication:
+    # Only run the auth preflight for workflow_dispatch or trusted same-repo PRs.
+    if: |
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event_name == 'pull_request' &&
+          !contains(github.event.pull_request.user.login, '[bot]') &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        )
+      )
     runs-on: ubuntu-latest
-    permissions: {}
-    env:
-      HAS_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
-      HAS_CLAUDE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+    permissions:
+      contents: read
     outputs:
-      has-auth: ${{ steps.check.outputs.has-auth }}
+      has_auth: ${{ steps.check.outputs.has_auth }}
     steps:
-      - uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
+      # Security scanning — must be the first step in every non-macOS job.
+      - name: Security Scan
+        uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
         with:
           egress-policy: block
-      - name: Check Claude authentication
+          allowed-domains: |
+            release-assets.githubusercontent.com
+            raw.githubusercontent.com
+            api.anthropic.com
+            claude.ai
+            downloads.claude.ai
+            registry.npmjs.org
+          enable-sudo: false
+
+      - name: Check authentication availability
         id: check
+        env:
+          API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
-          if [ "$HAS_ANTHROPIC_API_KEY" = "true" ] || [ "$HAS_CLAUDE_OAUTH_TOKEN" = "true" ]; then
-            echo "has-auth=true" >> "$GITHUB_OUTPUT"
+          if [ -n "$API_KEY" ] || [ -n "$OAUTH_TOKEN" ]; then
+            echo "has_auth=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has-auth=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping PR documentation validation: neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN is configured for this repository."
+            echo "has_auth=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping PR documentation validation because no Claude authentication is configured."
           fi
 
   docs-check:
-    needs: check-auth
+    needs: check-authentication
     # Skip bots and fork PRs (fork code is attacker-controlled)
     # workflow_dispatch fork check is handled inside _claude-docs-check.yml
     if: |
-      needs.check-auth.outputs.has-auth == 'true' &&
+      needs.check-authentication.outputs.has_auth == 'true' &&
       (
         github.event_name == 'workflow_dispatch' ||
         (
@@ -118,8 +136,8 @@ jobs:
       # changes; pinning to 'main' avoids that.
       toolkit_ref: 'main'
     secrets:
+      # Forward both supported Claude authentication methods to the reusable workflow.
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      # Use OAuth token (Pro/Max) instead of API key
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       # PAT for branch creation
       WORKFLOW_PAT: ${{ secrets.WORKFLOW_PAT }}
