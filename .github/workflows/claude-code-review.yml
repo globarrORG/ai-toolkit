@@ -157,7 +157,8 @@ jobs:
           needs.check-automated.result == 'success' &&
           (
             needs.check-automated.outputs.is_automated != 'true' ||
-            needs.check-automated.outputs.category == 'deps'
+            needs.check-automated.outputs.category == 'deps' ||
+            needs.check-automated.outputs.category == 'copilot'
           ) &&
           (
             github.event.pull_request.draft == false ||
@@ -879,7 +880,8 @@ jobs:
     if: |
       github.event_name == 'pull_request' &&
       needs.check-automated.outputs.is_automated == 'true' &&
-      needs.check-automated.outputs.category != 'deps'
+      needs.check-automated.outputs.category != 'deps' &&
+      needs.check-automated.outputs.category != 'copilot'
     runs-on: ubuntu-latest
     # No checkout, no API calls — this job runs Bullfrog and two echoes, and
     # fetching a SHA-pinned external action needs no token scope. `{}` is the
