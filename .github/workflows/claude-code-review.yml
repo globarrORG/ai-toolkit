@@ -260,7 +260,7 @@ jobs:
         # instead of failing the whole triage job over missing access
         # this run was never going to have.
         continue-on-error: true
-        uses: ./.github/actions/install_review_cli
+        uses: ./.review-tooling/.github/actions/install_review_cli
         with:
           # Pinned, never `@latest`, so an upstream release cannot change
           # review behavior mid-PR. Override without a commit by setting
