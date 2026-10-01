@@ -21,7 +21,7 @@ Contains GitHub Actions workflow definitions that automate CI/CD, code quality, 
 
 - `claude-code.yml` - Responds to @claude mentions in issues and PRs
 - `claude-code-review.yml` - Automated PR code reviews for **this** repository, via `@uniswap/review-cli`. Does not call `_claude-code-review.yml` (see [PR Code Review for this repository](#pr-code-review-for-this-repository-claude-code-reviewyml))
-- `claude-docs-check.yml` - Validates PR documentation is properly updated (CLAUDE.md, README, versions), forwards either Claude auth secret to `_claude-docs-check.yml`, and skips early when neither auth secret is configured
+- `claude-docs-check.yml` - Validates PR documentation is properly updated (CLAUDE.md, README, versions), forwards either Claude auth secret to `_claude-docs-check.yml`, and uses a caller-side `check-authentication` preflight to skip early when neither auth secret is configured
 - `generate-pr-title-description.yml` - Auto-generates PR titles and descriptions using Claude
 
 ### PR Title Validation (1 workflow)
@@ -556,7 +556,7 @@ So the `triage` job does a sparse checkout of `.github/actions` and `.claude`, a
 | `.claude/agents/*-reviewer.md`       | Repo-specific reviewers, **added to** review-cli's bundled set (not replacing it)                                                                                                                                                                                               |
 | `.github/actions/install_review_cli` | Installs the CLI from GitHub Packages into an isolated `$RUNNER_TEMP` dir. In the `review` job it is resolved from the trusted ref, not the PR head                                                                                                                             |
 | `vars.REVIEW_CLI_VERSION`            | CLI version override; falls back to the pin in the workflow. Never `@latest`                                                                                                                                                                                                    |
-| `secrets.REVIEW_CLI_TOKEN`           | Optional. A token with `packages:read` access. When it is unset, triage reports a notice and skips AI review; when present but unable to read the package, the installer treats Bun's "403 but no installed package" path as unavailable review-cli rather than a hard failure. |
+| `secrets.REVIEW_CLI_TOKEN`           | Optional. A token with `packages:read` access. When unset, triage reports a notice and skips AI review; when configured but package access is unavailable, triage continues with a notice and skips review. |
 | `secrets.CLAUDE_CODE_OAUTH_TOKEN`    | **Required.** `ANTHROPIC_API_KEY` is deliberately never forwarded to the review job                                                                                                                                                                                             |
 | `secrets.DATADOG_API_KEY`            | Optional. Enables CI Visibility stamping; the step is skipped when unset                                                                                                                                                                                                        |
 
@@ -642,7 +642,7 @@ You can authenticate with Claude using either method:
 1. **API Key (Traditional):** Set `ANTHROPIC_API_KEY` with your Anthropic API key
 2. **OAuth Token (Pro/Max Users):** Set `CLAUDE_CODE_OAUTH_TOKEN` with a token generated via `claude setup-token`
 
-If both are provided, OAuth token takes precedence. The top-level caller forwards both secrets to `_claude-docs-check.yml`, whose `check-authentication` job reports a notice and skips validation successfully when neither credential is configured.
+If both are provided, OAuth token takes precedence. The top-level caller runs a `check-authentication` preflight, forwards both secrets to `_claude-docs-check.yml`, and skips validation successfully when neither credential is configured.
 
 > **Important:** The [Claude GitHub App](https://github.com/apps/claude) must be installed on your repository for these workflows to function. This is required by Anthropic's official Claude Code GitHub Action.
 
