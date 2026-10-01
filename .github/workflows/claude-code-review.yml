@@ -232,6 +232,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Check review-cli token
+        if: env.HAS_REVIEW_CLI_TOKEN == 'true'
         env:
           REVIEW_CLI_TOKEN: ${{ secrets.REVIEW_CLI_TOKEN }}
         run: |
@@ -239,6 +240,10 @@ jobs:
             echo "::error::REVIEW_CLI_TOKEN is not configured. Add the secret with packages:read access to install @uniswap/review-cli."
             exit 1
           fi
+
+      - name: Note missing review-cli token
+        if: env.HAS_REVIEW_CLI_TOKEN != 'true'
+        run: echo "::notice::AI review skipped because REVIEW_CLI_TOKEN is not configured."
 
       - name: Checkout trusted installer action
         if: env.HAS_REVIEW_CLI_TOKEN == 'true'
