@@ -13,7 +13,7 @@ inputs:
     description: '@uniswap/review-cli version to install (e.g. 1.10.1). Pin via vars.REVIEW_CLI_VERSION at the call site.'
     required: true
   github-token:
-    description: 'Token with packages:read scope for @uniswap/review-cli (prefer secrets.REVIEW_CLI_TOKEN; fallback to secrets.GITHUB_TOKEN only when it has access).'
+    description: 'Token with packages:read scope. Typically secrets.REVIEW_CLI_TOKEN.'
     required: true
   bun-version:
     description: 'Bun runtime version. Must satisfy @uniswap/review-cli engines (>=1.3.13).'
@@ -89,19 +89,33 @@ runs:
           exit "$bun_add_status"
         fi
 
+        package_dir="$install_dir/node_modules/@uniswap/review-cli"
+        shim_path="$install_dir/node_modules/.bin/review-cli"
+        if [ ! -d "$package_dir" ]; then
+          if grep -Eqi '((npm\.pkg\.github\.com|@uniswap(/|%2f)review-cli).*(401|403)|(401|403).*(npm\.pkg\.github\.com|@uniswap(/|%2f)review-cli))' "$install_log"; then
+            echo "::warning::Skipping AI review: unable to download @uniswap/review-cli from GitHub Packages with the provided token (401/403)."
+            echo "bin-path=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::error::bun add succeeded but $package_dir is missing"
+          exit 1
+        fi
+
         bun_bin="$(command -v bun)"
         if [ -z "$bun_bin" ]; then
           echo "::error::setup-bun completed but no bun executable is available on PATH"
           exit 1
         fi
 
-        shim_path="$install_dir/node_modules/.bin/review-cli"
-
         # Bun occasionally installs the package without linking its `.bin`
         # shim. Recover from that by reading the package manifest and creating
         # a tiny wrapper ourselves rather than failing the whole workflow.
         if [ ! -x "$shim_path" ]; then
-          package_dir="$install_dir/node_modules/@uniswap/review-cli"
+          if grep -Eqi '((npm\.pkg\.github\.com|@uniswap(/|%2f)review-cli).*(401|403)|(401|403).*(npm\.pkg\.github\.com|@uniswap(/|%2f)review-cli))' "$install_log"; then
+            echo "::warning::Skipping AI review: unable to download @uniswap/review-cli from GitHub Packages with the provided token (401/403)."
+            echo "bin-path=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           package_json="$package_dir/package.json"
           if [ ! -f "$package_json" ]; then
             echo "::error::bun add succeeded but $package_json is missing"
@@ -158,10 +172,13 @@ runs:
 
         # Consumers gate on `bin-path != ''` to avoid resolving
         # "$REVIEW_CLI_BIN/review-cli" to "/review-cli" and dying on exit 127.
+        # That gate cannot catch a `bun add` that succeeds without linking the
+        # shim (a future major renaming its `bin` key, or a bun bin-linking
+        # change): bin-path would be non-empty and every gate would pass.
         # Even after the recovery block above, fail closed if the shim still is
         # not there or not executable.
         if [ ! -x "$shim_path" ]; then
-          echo "::error::bun add succeeded but $shim_path is missing or not executable"
+          echo "::error::bun add installed $package_dir but $shim_path is missing or not executable"
           exit 1
         fi
         echo "bin-path=$(dirname "$shim_path")" >> "$GITHUB_OUTPUT"

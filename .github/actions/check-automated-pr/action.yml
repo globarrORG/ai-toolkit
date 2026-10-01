@@ -18,7 +18,7 @@ outputs:
     description: 'Human-readable reason for skipping (empty if not automated)'
     value: ${{ steps.check.outputs.skip_reason }}
   category:
-    description: 'Category of automation (release, sync, deps, merge-queue, action-update, copilot, or empty)'
+    description: 'Category of automation (release, sync, deps, merge-queue, action-update, or empty)'
     value: ${{ steps.check.outputs.category }}
 
 runs:
@@ -57,12 +57,6 @@ runs:
           SKIP_REASON="Release automation branch (release/* prefix)"
           CATEGORY="release"
 
-        # Copilot agent branches
-        elif [[ "$BRANCH_NAME" == copilot/* ]]; then
-          IS_AUTOMATED="true"
-          SKIP_REASON="Copilot automation branch (copilot/* prefix)"
-          CATEGORY="copilot"
-
         # Action version update branches (e.g., chore/update-action-versions-2026-01-12)
         elif [[ "$BRANCH_NAME" == chore/update-action-versions-* ]]; then
           IS_AUTOMATED="true"
@@ -80,6 +74,7 @@ runs:
           IS_AUTOMATED="true"
           SKIP_REASON="Renovate dependency update branch (renovate/* prefix)"
           CATEGORY="deps"
+
         fi
 
         # ===========================================
