@@ -8,13 +8,13 @@ This directory contains GitHub Actions workflows for the AI Toolkit monorepo. Wo
 
 Workflows that run automated checks on pull requests and commits.
 
-| Workflow                                                                   | Trigger      | Purpose                                                                                                                                                                                     | Status                                                                                          |
-| -------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| [`ci-pr-checks.yml`](./ci-pr-checks.yml)                                   | Pull Request | Validates installation, builds affected packages, runs linting, formatting checks, and tests                                                                                                | ![PR Checks](https://github.com/owner/repo/actions/workflows/ci-pr-checks.yml/badge.svg)        |
-| [`ci-check-pr-title.yml`](./ci-check-pr-title.yml)                         | Pull Request | Validates conventional PR titles; semantic validation is skipped for automated PRs (per `check-automated-pr`) and for `copilot/*` coding-agent branches, whose titles are machine-generated |                                                                                                 |
-| [`generate-pr-title-description.yml`](./generate-pr-title-description.yml) | Pull Request | Generates PR titles/descriptions through the reusable metadata workflow and skips safely when neither Claude auth secret is configured                                                      |                                                                                                 |
-| [`claude-docs-check.yml`](./claude-docs-check.yml)                         | Pull Request | Validates PR documentation updates, forwards Claude auth to the reusable docs-check workflow, and skips safely when neither auth secret is configured via a preflight auth check job        |                                                                                                 |
-| [`claude-welcome.yml`](./claude-welcome.yml)                               | PR Opened    | Posts welcome message from Claude to newly opened PRs                                                                                                                                       | ![Claude Welcome](https://github.com/owner/repo/actions/workflows/claude-welcome.yml/badge.svg) |
+| Workflow                                           | Trigger      | Purpose                                                                                                                                                                                     | Status                                                                                          |
+| -------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| [`ci-pr-checks.yml`](./ci-pr-checks.yml)           | Pull Request | Validates installation, builds affected packages, runs linting, formatting checks, and tests                                                                                                | ![PR Checks](https://github.com/owner/repo/actions/workflows/ci-pr-checks.yml/badge.svg)        |
+| [`ci-check-pr-title.yml`](./ci-check-pr-title.yml) | Pull Request | Validates conventional PR titles; semantic validation is skipped for automated PRs (per `check-automated-pr`) and for `copilot/*` coding-agent branches, whose titles are machine-generated |                                                                                                 |
+| [`generate-pr-title-description.yml`](./generate-pr-title-description.yml) | Pull Request | Generates PR titles/descriptions through the reusable metadata workflow and skips safely when neither Claude auth secret is configured                                                       |                                                                                                 |
+| [`claude-docs-check.yml`](./claude-docs-check.yml) | Pull Request | Validates PR documentation updates, forwards Claude auth to the reusable docs-check workflow, and uses a caller-side auth preflight to skip safely when neither auth secret is configured   |                                                                                                 |
+| [`claude-welcome.yml`](./claude-welcome.yml)       | PR Opened    | Posts welcome message from Claude to newly opened PRs                                                                                                                                       | ![Claude Welcome](https://github.com/owner/repo/actions/workflows/claude-welcome.yml/badge.svg) |
 
 **Key Features:**
 
@@ -29,7 +29,8 @@ Workflows that run automated checks on pull requests and commits.
 
   - Uses the reusable `_claude-docs-check.yml` workflow
   - Forwards either `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`
-  - Uses a preflight auth check job so the caller can skip safely when neither Claude credential is configured
+  - Runs a caller-side `check-authentication` preflight before invoking the reusable workflow
+  - Skips safely when neither Claude credential is configured
   - The reusable workflow emits deterministic skipped outputs (`verdict=SKIP`, zero counts, empty branch fields) when auth is unavailable
 
 - **generate-pr-title-description.yml**:
@@ -207,7 +208,7 @@ Workflows designed to be called by other workflows using `workflow_call`. These 
 
 ### Claude GitHub App (Required for Claude-powered workflows)
 
-The [Claude GitHub App](https://github.com/apps/claude) must be installed on your repository to use any Claude-powered workflows (`_claude-main.yml`, `_claude-welcome.yml`, `_claude-code-review.yml`, `_generate-changelog.yml`, `_generate-pr-metadata.yml`, `_claude-task-worker.yml`).
+The [Claude GitHub App](https://github.com/apps/claude) must be installed on your repository to use any Claude-powered workflows (`_claude-main.yml`, `_claude-welcome.yml`, `_claude-code-review.yml`, `_generate-changelog.yml`, `_generate-pr-metadata.yml`).
 
 1. Go to: <https://github.com/apps/claude>
 2. Click **Install**
