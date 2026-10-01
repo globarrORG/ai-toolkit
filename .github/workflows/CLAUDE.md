@@ -1067,6 +1067,7 @@ These workflows are prefixed with two `__` and are only used within this reposit
 - `claude-code-review.yml` - Automated code reviews via `@uniswap/review-cli`
 - `claude-welcome.yml` - New PR welcomes
 - `generate-pr-title-description.yml` - Auto-generated PR titles and descriptions
+  - The preflight job uses no permissions; the reusable metadata job has only the read, pull-request write, and OIDC permissions it requires.
 - `release-update-production.yml` - Production sync automation
 - `update-action-versions.yml` - Automated GitHub Actions version updates (scheduled)
 
