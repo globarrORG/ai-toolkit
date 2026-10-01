@@ -32,36 +32,43 @@ permissions:
   id-token: write
 
 jobs:
-  # Check that Claude auth is configured before invoking the reusable workflow.
-  # Without this, missing secrets surface as a hard failure in validate-claude-auth
-  # instead of a clean skip.
-  preflight:
+  # Cheap pre-check so forks/environments without Claude credentials configured
+  # get a clean skip instead of the reusable workflow hard-failing partway
+  # through (validate-claude-auth exits 1 when neither secret is set). Secrets
+  # can't be read in a job-level `if:`, so surface presence via job-level env
+  # (per .github/workflows/CLAUDE.md) and expose it as a job output instead.
+  check-auth:
     runs-on: ubuntu-latest
     permissions: {}
+    env:
+      HAS_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+      HAS_CLAUDE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
     outputs:
-      has_claude_auth: ${{ steps.check-secret.outputs.has_claude_auth }}
+      has-auth: ${{ steps.check.outputs.has-auth }}
     steps:
-      - id: check-secret
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      - uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
+        with:
+          egress-policy: block
+      - name: Check Claude authentication
+        id: check
         run: |
-          if [ -n "$ANTHROPIC_API_KEY" ] || [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
-            echo "has_claude_auth=true" >> "$GITHUB_OUTPUT"
+          if [ "$HAS_ANTHROPIC_API_KEY" = "true" ] || [ "$HAS_CLAUDE_OAUTH_TOKEN" = "true" ]; then
+            echo "has-auth=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has_claude_auth=false" >> "$GITHUB_OUTPUT"
+            echo "has-auth=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping PR title/description generation: neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN is configured for this repository."
           fi
 
   generate-metadata:
-    needs: preflight
+    needs: check-auth
     # Skip conditions:
-    # - Missing Claude auth (ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN not configured)
+    # - No Claude authentication configured (see check-auth job above)
     # - Merge queue PRs (handled separately)
     # - Dependabot PRs (already have proper titles)
     # - Release PRs (have their own format)
     # - Production promotion PRs (have their own format)
     if: |
-      needs.preflight.outputs.has_claude_auth == 'true' &&
+      needs.check-auth.outputs.has-auth == 'true' &&
       !contains(github.head_ref, 'gh-readonly-queue/') &&
       !contains(github.head_ref, 'dependabot/') &&
       !contains(github.head_ref, 'release/') &&
@@ -72,11 +79,12 @@ jobs:
       generation_mode: "title,description"
       pr_number: ${{ github.event.pull_request.number }}
       base_ref: ${{ github.base_ref }}
-      # Use default model (claude-sonnet-5)
+      # Use default model (claude-opus-5)
       # Use default timeout (15 minutes)
       # Use default prompt from ai-toolkit
       commit_history_count: 30
       pr_history_count: 10
+      allowed_bots: "claude"
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
