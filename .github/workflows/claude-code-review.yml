@@ -232,6 +232,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Check review-cli token
+        if: env.HAS_REVIEW_CLI_TOKEN == 'true'
         env:
           REVIEW_CLI_TOKEN: ${{ secrets.REVIEW_CLI_TOKEN }}
         run: |
@@ -239,6 +240,10 @@ jobs:
             echo "::error::REVIEW_CLI_TOKEN is not configured. Add the secret with packages:read access to install @uniswap/review-cli."
             exit 1
           fi
+
+      - name: Note missing review-cli token
+        if: env.HAS_REVIEW_CLI_TOKEN != 'true'
+        run: echo "::notice::AI review skipped because REVIEW_CLI_TOKEN is not configured."
 
       - name: Checkout trusted installer action
         if: env.HAS_REVIEW_CLI_TOKEN == 'true'
@@ -253,6 +258,7 @@ jobs:
 
       - name: Install review-cli
         id: install-review-cli
+        if: env.HAS_REVIEW_CLI_TOKEN == 'true'
         # Masked on purpose: GITHUB_TOKEN cannot read a private GitHub
         # Packages registry hosted under a different org/account (e.g. a
         # fork or a personal clone of this repo), so this 403s there by
@@ -260,7 +266,7 @@ jobs:
         # instead of failing the whole triage job over missing access
         # this run was never going to have.
         continue-on-error: true
-        uses: ./.github/actions/install_review_cli
+        uses: ./.review-tooling/.github/actions/install_review_cli
         with:
           # Pinned, never `@latest`, so an upstream release cannot change
           # review behavior mid-PR. Override without a commit by setting
@@ -271,7 +277,7 @@ jobs:
           github-token: ${{ secrets.REVIEW_CLI_TOKEN }}
 
       - name: Note that review-cli install failed
-        if: steps.install-review-cli.outcome != 'success'
+        if: env.HAS_REVIEW_CLI_TOKEN == 'true' && steps.install-review-cli.outcome != 'success'
         run: echo "::notice::review-cli could not be installed (no packages:read access to @uniswap/review-cli from this run). Skipping AI review triage."
 
       # `loadConfig` treats a missing or invalid .claude/review.yml as
