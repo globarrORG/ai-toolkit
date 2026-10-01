@@ -594,6 +594,8 @@ Comment triggers are restricted to `OWNER`, `MEMBER`, and `COLLABORATOR` associa
 
 This workflow validates that PR documentation is properly updated based on code changes. It checks CLAUDE.md files, README files, and plugin version bumps.
 
+The top-level `claude-docs-check.yml` caller checks for either Claude authentication secret before invoking this reusable workflow. If neither is configured, the docs check is skipped with a notice rather than failing authentication.
+
 **Key Features:**
 
 | Feature                     | Description                                                                        |
