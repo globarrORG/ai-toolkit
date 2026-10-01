@@ -38,6 +38,8 @@ jobs:
     outputs:
       has_auth: ${{ steps.check.outputs.has_auth }}
     steps:
+      - uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
+
       - name: Check Claude authentication availability
         id: check
         env:
