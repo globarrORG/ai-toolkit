@@ -212,6 +212,8 @@ The [Claude GitHub App](https://github.com/apps/claude) must be installed on you
 
 > **Note:** External consumers of the reusable workflows (e.g., `_claude-code-review.yml`, `_generate-pr-metadata.yml`) do **not** need `WORKFLOW_PAT`. The ai-toolkit repository is public, so fetching default prompts requires no authentication.
 
+> **Note:** The `generate-pr-title-description.yml` caller skips metadata generation when neither `ANTHROPIC_API_KEY` nor `CLAUDE_CODE_OAUTH_TOKEN` is configured.
+
 ## Usage Examples
 
 ### Calling a Reusable Workflow

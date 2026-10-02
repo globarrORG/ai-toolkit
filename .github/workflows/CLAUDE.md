@@ -89,6 +89,8 @@ You can authenticate with Claude using either method:
 
 If both are provided, OAuth token takes precedence. At least one authentication method must be configured.
 
+The top-level `generate-pr-title-description.yml` caller skips metadata generation when neither authentication secret is configured.
+
 > **Important:** The [Claude GitHub App](https://github.com/apps/claude) must be installed on your repository for these workflows to function. This is required by Anthropic's official Claude Code GitHub Action.
 
 **Configuration Inputs:**
@@ -554,6 +556,7 @@ So the `triage` job does a sparse checkout of `.github/actions` and `.claude`, a
 | `.claude/agents/*-reviewer.md`       | Repo-specific reviewers, **added to** review-cli's bundled set (not replacing it)                                                                   |
 | `.github/actions/install_review_cli` | Installs the CLI from GitHub Packages into an isolated `$RUNNER_TEMP` dir. In the `review` job it is resolved from the trusted ref, not the PR head |
 | `vars.REVIEW_CLI_VERSION`            | CLI version override; falls back to the pin in the workflow. Never `@latest`                                                                        |
+| `secrets.REVIEW_CLI_TOKEN`           | Required for GitHub Packages access to the private `@uniswap/review-cli` package; must have `packages:read` access                                  |
 | `secrets.CLAUDE_CODE_OAUTH_TOKEN`    | **Required.** `ANTHROPIC_API_KEY` is deliberately never forwarded to the review job                                                                 |
 | `secrets.DATADOG_API_KEY`            | Optional. Enables CI Visibility stamping; the step is skipped when unset                                                                            |
 
@@ -640,6 +643,8 @@ You can authenticate with Claude using either method:
 2. **OAuth Token (Pro/Max Users):** Set `CLAUDE_CODE_OAUTH_TOKEN` with a token generated via `claude setup-token`
 
 If both are provided, OAuth token takes precedence. At least one authentication method must be configured.
+
+The repository's top-level `claude-docs-check.yml` caller skips the reusable workflow when neither authentication secret is configured.
 
 > **Important:** The [Claude GitHub App](https://github.com/apps/claude) must be installed on your repository for these workflows to function. This is required by Anthropic's official Claude Code GitHub Action.
 
