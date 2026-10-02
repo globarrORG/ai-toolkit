@@ -181,6 +181,7 @@ env:
 jobs:
   check-authentication:
     runs-on: ubuntu-latest
+    permissions: {}
     outputs:
       available: ${{ steps.check.outputs.available }}
 
