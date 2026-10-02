@@ -210,6 +210,8 @@ The [Claude GitHub App](https://github.com/apps/claude) must be installed on you
 | `RELEASE_NOTES_NOTION_DATABASE_ID` | notify-release.yml                          | Notion database ID for release notes (optional)     |
 | `NODE_AUTH_TOKEN`                  | publish-packages.yml                        | Publish to NPM registry                             |
 
+The `generate-pr-title-description.yml` workflow checks for either Claude credential and skips metadata generation if neither is configured.
+
 > **Note:** External consumers of the reusable workflows (e.g., `_claude-code-review.yml`, `_generate-pr-metadata.yml`) do **not** need `WORKFLOW_PAT`. The ai-toolkit repository is public, so fetching default prompts requires no authentication.
 
 ## Usage Examples
