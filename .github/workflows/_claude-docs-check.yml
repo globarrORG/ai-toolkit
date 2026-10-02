@@ -179,7 +179,43 @@ env:
   BUN_CONFIG_FILE: /dev/null
 
 jobs:
+  check-authentication:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      has_auth: ${{ steps.check.outputs.has_auth }}
+    steps:
+      # Security scanning — must be the first step in every non-macOS job.
+      - name: Security Scan
+        uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
+        with:
+          egress-policy: block
+          allowed-domains: |
+            release-assets.githubusercontent.com
+            raw.githubusercontent.com
+            api.anthropic.com
+            claude.ai
+            downloads.claude.ai
+            registry.npmjs.org
+          enable-sudo: false
+
+      - name: Check authentication availability
+        id: check
+        env:
+          API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -n "$API_KEY" ] || [ -n "$OAUTH_TOKEN" ]; then
+            echo "has_auth=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_auth=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping PR documentation validation because no Claude authentication is configured."
+          fi
+
   docs-check:
+    needs: check-authentication
+    if: needs.check-authentication.outputs.has_auth == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.timeout_minutes }}
     env:
@@ -260,6 +296,7 @@ jobs:
 
       # Download validate-claude-auth action if needed
       - name: Ensure validate-claude-auth action exists
+        if: false
         env:
           TOOLKIT_REF: ${{ inputs.toolkit_ref }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -291,6 +328,7 @@ jobs:
           fi
 
       - name: Validate Authentication
+        if: false
         uses: ./.github/actions/validate-claude-auth
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -683,7 +721,7 @@ jobs:
           CLAUDE_ARGS="$CLAUDE_ARGS --json-schema '$COMPACT_SCHEMA'"
 
           # Read-only tools
-          CLAUDE_ARGS="$CLAUDE_ARGS --allowedTools Read,Grep,Glob,Bash(git log:*),Bash(git diff:*),Bash(git show:*)"
+          CLAUDE_ARGS="$CLAUDE_ARGS --allowedTools \"Read,Grep,Glob,Bash(git log:*),Bash(git diff:*),Bash(git show:*)\""
 
           # Per-call unguessable heredoc delimiter; defense in depth against
           # the $GITHUB_OUTPUT duplicate-key last-write-wins injection class.
@@ -707,7 +745,7 @@ jobs:
       # Run Claude
       - name: Run Claude Docs Check
         id: claude
-        uses: anthropics/claude-code-action@787c5a0ce96a9a6cfb050ea0c8f4c05f2447c251 # v1.0.133
+        uses: anthropics/claude-code-action@a874e9ecd7bb36efdad65429c6b35815f5a08f10 # v1.0.210
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -1032,7 +1070,7 @@ jobs:
       - name: Run Claude Auto-Fix
         id: claude-fix
         if: steps.auto-fix-check.outputs.should_fix == 'true' && steps.pr-branch.outputs.repo_full_name == github.repository
-        uses: anthropics/claude-code-action@787c5a0ce96a9a6cfb050ea0c8f4c05f2447c251 # v1.0.133
+        uses: anthropics/claude-code-action@a874e9ecd7bb36efdad65429c6b35815f5a08f10 # v1.0.210
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
