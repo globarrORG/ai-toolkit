@@ -510,6 +510,8 @@ This is how ai-toolkit reviews its **own** PRs. It runs [`@uniswap/review-cli`](
 
 **Why the two coexist:** `_claude-code-review.yml` is a published product with 10+ external consumers pinned to it by commit SHA. It stays. This repo simply consumes the shared reviewer that `Uniswap/universe` and `Uniswap/backend` already use, so improvements to review quality land in one place instead of three.
 
+**GitHub Packages authentication:** `@uniswap/review-cli` is private to `Uniswap/internal-tools`, so the workflow must use the `REVIEW_CLI_TOKEN` repository secret with `packages:read` access to that package. The workflow's `GITHUB_TOKEN` does not have access to this package.
+
 **Architecture — two jobs plus three supporting jobs:**
 
 | Job                     | Runs when                                       | Does                                                                                     |
