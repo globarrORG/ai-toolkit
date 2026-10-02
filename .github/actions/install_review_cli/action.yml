@@ -79,8 +79,8 @@ runs:
         if bun add "@uniswap/review-cli@${REVIEW_CLI_VERSION}" 2>&1 | tee "$bun_add_log"; then
           :
         else
-          echo "::warning::Unable to access @uniswap/review-cli from GitHub Packages; continuing without AI review."
-          exit 0
+          echo "::error::Unable to access @uniswap/review-cli from GitHub Packages."
+          exit 1
         fi
 
         package_dir="$install_dir/node_modules/@uniswap/review-cli"
@@ -89,10 +89,10 @@ runs:
         # Bun can report the GitHub Packages 403 in stdout/stderr without
         # tripping the `if ! bun add ...` guard above, leaving no installed
         # package and no binary. Treat that the same as the direct failure
-        # path: warn and let callers skip AI review cleanly.
+        # path and fail the caller.
         if [ ! -d "$package_dir" ]; then
-          echo "::warning::Unable to access @uniswap/review-cli from GitHub Packages; continuing without AI review."
-          exit 0
+          echo "::error::Unable to access @uniswap/review-cli from GitHub Packages."
+          exit 1
         fi
 
         # Bun can also leave a partial package directory behind while still

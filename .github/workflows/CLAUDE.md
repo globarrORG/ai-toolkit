@@ -15,7 +15,7 @@ Contains GitHub Actions workflow definitions that automate CI/CD, code quality, 
 
 - `publish-packages.yml` - Unified package publishing workflow (automatic on push to main/next, manual via workflow_dispatch). Also detects changes to reusable workflows and syncs them to the `next` branch with Slack notifications.
 - `release-update-production.yml` - Creates production sync PRs with AI changelogs, skipping safely when the `main` branch is unavailable
-- `generator-generic-ossf-slsa3-publish.yml` - Generates SLSA Level 3 provenance for release artifacts.
+- `generator-generic-ossf-slsa3-publish.yml` - Generates SLSA Level 3 provenance for release assets.
 
 ### Code Review & PR Management (4 workflows)
 
@@ -26,7 +26,7 @@ Contains GitHub Actions workflow definitions that automate CI/CD, code quality, 
 
 ### PR Title Validation (1 workflow)
 
-- `ci-check-pr-title.yml` - Validates PR titles follow conventional commit format
+- `ci-check-pr-title.yml` - Validates PR titles follow conventional commit format, skipping semantic checks for automated PRs and `copilot/*` branches
 
 ### Dependency Management (3 workflows)
 
@@ -89,7 +89,7 @@ You can authenticate with Claude using either method:
 1. **API Key (Traditional):** Set `ANTHROPIC_API_KEY` with your Anthropic API key
 2. **OAuth Token (Pro/Max Users):** Set `CLAUDE_CODE_OAUTH_TOKEN` with a token generated via `claude setup-token`
 
-If both are provided, OAuth token takes precedence. At least one authentication method must be configured.
+If both are provided, OAuth token takes precedence. At least one authentication method must be configured; the workflow fails authentication validation if neither is set.
 
 > **Important:** The [Claude GitHub App](https://github.com/apps/claude) must be installed on your repository for these workflows to function. This is required by Anthropic's official Claude Code GitHub Action.
 
@@ -550,15 +550,15 @@ So the `triage` job does a sparse checkout of `.github/actions` and `.claude`, a
 
 **Configuration lives in the repo, not in workflow inputs:**
 
-| File / setting                       | Controls                                                                                                                                                                                                                                                                                                                                                   |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.claude/review.yml`                 | Model, per-agent budget, skip policy, investigation gate, diff summarization, triage staffing                                                                                                                                                                                                                                                              |
-| `.claude/agents/*-reviewer.md`       | Repo-specific reviewers, **added to** review-cli's bundled set (not replacing it)                                                                                                                                                                                                                                                                          |
-| `.github/actions/install_review_cli` | Installs the CLI from GitHub Packages into an isolated `$RUNNER_TEMP` dir. In the `review` job it is resolved from the trusted ref, not the PR head                                                                                                                                                                                                        |
-| `vars.REVIEW_CLI_VERSION`            | CLI version override; falls back to the pin in the workflow. Never `@latest`                                                                                                                                                                                                                                                                               |
-| `secrets.REVIEW_CLI_TOKEN`           | Optional. A token with `packages:read` access; when absent or unable to access the package, the triage job reports a notice and skips AI review successfully. The installer also treats Bun's GitHub Packages auth-failure paths (including the "403 plus leftover package dir / missing shim" case) as unavailable review-cli rather than a hard failure. |
-| `secrets.CLAUDE_CODE_OAUTH_TOKEN`    | **Required.** `ANTHROPIC_API_KEY` is deliberately never forwarded to the review job                                                                                                                                                                                                                                                                        |
-| `secrets.DATADOG_API_KEY`            | Optional. Enables CI Visibility stamping; the step is skipped when unset                                                                                                                                                                                                                                                                                   |
+| File / setting                       | Controls                                                                                                                                                                                                    |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.claude/review.yml`                 | Model, per-agent budget, skip policy, investigation gate, diff summarization, triage staffing                                                                                                               |
+| `.claude/agents/*-reviewer.md`       | Repo-specific reviewers, **added to** review-cli's bundled set (not replacing it)                                                                                                                           |
+| `.github/actions/install_review_cli` | Installs the CLI from GitHub Packages into an isolated `$RUNNER_TEMP` dir. In the `review` job it is resolved from the trusted ref, not the PR head                                                         |
+| `vars.REVIEW_CLI_VERSION`            | CLI version override; falls back to the pin in the workflow. Never `@latest`                                                                                                                                |
+| `secrets.REVIEW_CLI_TOKEN`           | Optional. A token with `packages:read` access. When unset, triage reports a notice and skips AI review; when configured but package access is unavailable, triage continues with a notice and skips review. |
+| `secrets.CLAUDE_CODE_OAUTH_TOKEN`    | **Required.** `ANTHROPIC_API_KEY` is deliberately never forwarded to the review job                                                                                                                         |
+| `secrets.DATADOG_API_KEY`            | Optional. Enables CI Visibility stamping; the step is skipped when unset                                                                                                                                    |
 
 **Repo-specific reviewers.** review-cli ships 11 bundled agents: security, correctness, patterns, dependency-upgrade, and general reviewers; contract-security and defi-risk reviewers (neither applicable here, see `triage.guidance`); stack-security-analyst and stack-synthesis for stacked PRs; plus triage and synthesis. ai-toolkit adds two:
 
@@ -642,7 +642,7 @@ You can authenticate with Claude using either method:
 1. **API Key (Traditional):** Set `ANTHROPIC_API_KEY` with your Anthropic API key
 2. **OAuth Token (Pro/Max Users):** Set `CLAUDE_CODE_OAUTH_TOKEN` with a token generated via `claude setup-token`
 
-If both are provided, OAuth token takes precedence. A preflight job checks for either credential; if neither is configured, the workflow reports a notice and skips validation successfully.
+If both are provided, OAuth token takes precedence. The top-level caller runs a `check-authentication` preflight, forwards both secrets to `_claude-docs-check.yml`, and skips validation successfully when neither credential is configured.
 
 > **Important:** The [Claude GitHub App](https://github.com/apps/claude) must be installed on your repository for these workflows to function. This is required by Anthropic's official Claude Code GitHub Action.
 
@@ -778,6 +778,8 @@ The workflow uploads artifacts for debugging (retained for 7 days):
 
 This workflow generates PR titles and descriptions using Claude AI with the following features:
 
+When neither Claude authentication secret is available, its preflight job completes successfully and skips metadata generation. This lets repositories adopt the workflow before configuring `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` without failing pull requests.
+
 **Content Preservation with Markers:**
 
 The workflow wraps generated descriptions in HTML comment markers to enable selective updates:
@@ -852,8 +854,8 @@ The `generation_mode` input is a comma-separated list that controls what the wor
 
 | Secret                    | Required                                      | Description                                                                                                                               |
 | ------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`       | Yes (unless `CLAUDE_CODE_OAUTH_TOKEN` is set) | Anthropic API key for Claude access                                                                                                       |
-| `CLAUDE_CODE_OAUTH_TOKEN` | No (alternative to `ANTHROPIC_API_KEY`)       | Claude Code OAuth token for authentication. When provided, takes precedence over `ANTHROPIC_API_KEY`. Generate with `claude setup-token`. |
+| `ANTHROPIC_API_KEY`       | No                                            | Anthropic API key for Claude access                                                                                                       |
+| `CLAUDE_CODE_OAUTH_TOKEN` | No                                            | Claude Code OAuth token for authentication. When provided, takes precedence over `ANTHROPIC_API_KEY`. Generate with `claude setup-token`. |
 
 **Authentication Methods:**
 
@@ -862,7 +864,7 @@ You can authenticate with Claude using either method:
 1. **API Key (Traditional):** Set `ANTHROPIC_API_KEY` with your Anthropic API key
 2. **OAuth Token (Pro/Max Users):** Set `CLAUDE_CODE_OAUTH_TOKEN` with a token generated via `claude setup-token`
 
-If both are provided, OAuth token takes precedence. At least one authentication method must be configured.
+If both are provided, OAuth token takes precedence. If neither is configured, PR metadata generation is skipped successfully.
 
 > **Important:** The [Claude GitHub App](https://github.com/apps/claude) must be installed on your repository for these workflows to function. This is required by Anthropic's official Claude Code GitHub Action.
 >
@@ -1063,10 +1065,12 @@ These workflows are prefixed with two `__` and are only used within this reposit
 
 - `ci-pr-checks.yml` - Main PR validation pipeline
 - `ci-check-pr-title.yml` - PR title format validation; semantic validation is skipped for automated PRs (`check-automated-pr`) and for `copilot/*` coding-agent branches, whose titles are machine-generated from the task description rather than authored by a human contributor. The workflow resolves branch names through `github.head_ref || github.event.pull_request.head.ref` so Copilot-branch detection remains reliable.
+- `claude-auto-tasks.yml` - Autonomous task processing from Linear (scheduled)
 - `claude-code.yml` - Enables @claude mentions
 - `claude-code-review.yml` - Automated code reviews via `@uniswap/review-cli`
 - `claude-welcome.yml` - New PR welcomes
 - `generate-pr-title-description.yml` - Auto-generated PR titles and descriptions
+  - The preflight job uses no permissions; the reusable metadata job has only the read, pull-request write, and OIDC permissions it requires.
 - `release-update-production.yml` - Production sync automation
 - `update-action-versions.yml` - Automated GitHub Actions version updates (scheduled)
 
@@ -1381,6 +1385,8 @@ Never use tags or branch names directly.
 ### Bullfrog Security Scanning (CRITICAL)
 
 **Every job running on non-macOS runners MUST have `bullfrogsec/bullfrog` as the FIRST step** - no exceptions.
+
+Codacy and CodeQL use audit mode; CodeQL skips Bullfrog for its macOS Swift runner. Both retain SHA-pinned actions and disable checkout credential persistence.
 
 This applies to ALL jobs, including:
 
