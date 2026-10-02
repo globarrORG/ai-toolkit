@@ -32,13 +32,37 @@ permissions:
   id-token: write
 
 jobs:
+  check_auth:
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      has_auth: ${{ steps.check.outputs.has_auth }}
+    steps:
+      - name: Security Scan
+        uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
+
+      - name: Check Claude authentication
+        id: check
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [[ -n "$ANTHROPIC_API_KEY" || -n "$CLAUDE_CODE_OAUTH_TOKEN" ]]; then
+            echo "has_auth=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_auth=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping PR metadata generation because no Claude authentication is configured."
+          fi
+
   generate-metadata:
     # Skip conditions:
     # - Merge queue PRs (handled separately)
     # - Dependabot PRs (already have proper titles)
     # - Release PRs (have their own format)
     # - Production promotion PRs (have their own format)
+    needs: check_auth
     if: |
+      needs.check_auth.outputs.has_auth == 'true' &&
       !contains(github.head_ref, 'gh-readonly-queue/') &&
       !contains(github.head_ref, 'dependabot/') &&
       !contains(github.head_ref, 'release/') &&
