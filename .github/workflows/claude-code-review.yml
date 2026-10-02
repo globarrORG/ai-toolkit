@@ -97,6 +97,8 @@ jobs:
     outputs:
       available: ${{ steps.check.outputs.available }}
     steps:
+      - uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
+
       - id: check
         env:
           REVIEW_CLI_TOKEN: ${{ secrets.REVIEW_CLI_TOKEN }}
@@ -224,9 +226,8 @@ jobs:
     steps:
       - uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
 
-      # Sparse checkout of just the composite action and `.claude/`. The
-      # gate needs BOTH: the action to install the CLI, and
-      # `.claude/review.yml` for the skip policy.
+      # Sparse checkout of `.claude/` for the skip policy. Keep this on the
+      # event ref so triage uses the policy being reviewed.
       #
       # Do NOT drop `.claude` and add `--skip-config` to the gate below.
       # `--skip-config` passes NO policy at all, which is not the same as
@@ -235,28 +236,30 @@ jobs:
       # branch and author skips are simply not applied. Reading the real
       # config is what makes the policy in .claude/review.yml effective.
       #
-      # Deliberately NOT pinned to the default branch, unlike the review
-      # job's tooling checkout. With no `ref:` this resolves to GITHUB_SHA
-      # (the merge commit on `pull_request`, the default branch on
-      # issue_comment / workflow_dispatch), so a PR can influence the skip
-      # policy the gate reads. That is proportionate here: this job holds
-      # no CLAUDE_CODE_OAUTH_TOKEN and runs no agent, so the worst case is
-      # a PR changing its own review eligibility, not code execution with a
-      # credential. The fork guard below deliberately does not rely on
-      # config — it resolves the head repo through the API instead.
-      - name: Checkout repository (config + composite action)
+      # The checkout intentionally follows the event ref so a PR can influence
+      # the skip policy it reads. The installer is loaded separately from the
+      # trusted default branch below because it receives REVIEW_CLI_TOKEN.
+      - name: Checkout repository (event-ref config)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
           sparse-checkout: |
-            .github/actions
             .claude
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout review tooling (trusted ref)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          path: .review-tooling
+          sparse-checkout: .github/actions
           sparse-checkout-cone-mode: false
 
       - name: Install review-cli
         id: install-review-cli
         continue-on-error: true
-        uses: ./.github/actions/install_review_cli
+        uses: ./.review-tooling/.github/actions/install_review_cli
         with:
           # Pinned, never `@latest`, so an upstream release cannot change
           # review behavior mid-PR. Override without a commit by setting
