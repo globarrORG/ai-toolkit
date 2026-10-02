@@ -103,6 +103,8 @@ You can authenticate with Claude using either method:
 
 If both are provided, OAuth token takes precedence. At least one authentication method must be configured.
 
+The `generate-pr-title-description.yml` caller checks whether either credential is configured and skips metadata generation when neither is available.
+
 > **Important:** The [Claude GitHub App](https://github.com/apps/claude) must be installed on your repository for these workflows to function. This is required by Anthropic's official Claude Code GitHub Action.
 
 **Configuration Inputs:**
