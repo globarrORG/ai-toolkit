@@ -32,7 +32,7 @@ permissions:
   id-token: write
 
 jobs:
-  check-auth:
+  check_auth:
     runs-on: ubuntu-latest
     permissions: {}
     outputs:
@@ -60,7 +60,7 @@ jobs:
     # - Dependabot PRs (already have proper titles)
     # - Release PRs (have their own format)
     # - Production promotion PRs (have their own format)
-    needs: check-auth
+    needs: check_auth
     if: |
       needs.check_auth.outputs.has_auth == 'true' &&
       !contains(github.head_ref, 'gh-readonly-queue/') &&
