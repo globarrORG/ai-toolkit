@@ -29,6 +29,10 @@ concurrency:
 permissions: {}
 
 jobs:
+  # Cheap pre-check so environments without Claude credentials get a clean skip
+  # instead of the reusable workflow hard-failing when both secrets are absent.
+  # Secrets cannot be read in a job-level `if:`, so expose their presence via
+  # job-level env and an output instead.
   check-auth:
     runs-on: ubuntu-latest
     permissions: {}
@@ -41,7 +45,7 @@ jobs:
       - name: Security scanning
         uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
         with:
-          egress-policy: audit
+          egress-policy: block
 
       - name: Check Claude authentication
         id: check-auth
@@ -50,7 +54,7 @@ jobs:
             echo "has_auth=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_auth=false" >> "$GITHUB_OUTPUT"
-            echo "Skipping PR metadata generation because no Claude authentication secret is configured."
+            echo "::notice::Skipping PR title/description generation: neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN is configured for this repository."
           fi
 
   generate-metadata:
@@ -60,7 +64,7 @@ jobs:
       pull-requests: write
       id-token: write
     # Skip conditions:
-    # - Claude authentication is not configured
+    # - No Claude authentication configured (see check-auth job above)
     # - Merge queue PRs (handled separately)
     # - Dependabot PRs (already have proper titles)
     # - Release PRs (have their own format)
