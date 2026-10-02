@@ -181,10 +181,13 @@ env:
 jobs:
   check-authentication:
     runs-on: ubuntu-latest
+    permissions: {}
     outputs:
       available: ${{ steps.check.outputs.available }}
 
     steps:
+      # Per .github/workflows/CLAUDE.md, bullfrog must be the first step in
+      # every job on a non-macOS runner.
       - name: Security Scan
         uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
         with:
