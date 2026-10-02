@@ -20,6 +20,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: next
           persist-credentials: false
       - name: Get latest claude-code-action release
         id: latest
@@ -27,10 +28,30 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "::group::Fetching latest release from anthropics/claude-code-action"
-          RELEASE=$(gh api repos/anthropics/claude-code-action/releases/latest)
-          LATEST_TAG=$(echo "$RELEASE" | jq -r '.tag_name')
-          RELEASE_URL=$(echo "$RELEASE" | jq -r '.html_url')
-          RELEASE_NOTES=$(echo "$RELEASE" | jq -r '.body // "No release notes provided."')
+          # Upstream publishes a moving "v1" release alongside each versioned one, and
+          # releases/latest orders by publish date, so it returns "v1". A moving tag in
+          # a pin comment fails zizmor's stale-ref audit, so select the newest concrete
+          # vX.Y.Z release instead.
+          gh api 'repos/anthropics/claude-code-action/releases?per_page=100' > /tmp/releases.json
+          # Sort by semver, not publish date: /releases is date-ordered, so a
+          # backport published after a newer release would otherwise be picked,
+          # and "Determine if update is needed" only tests SHA inequality - it
+          # would open the same downgrade PR every week.
+          LATEST_TAG=$(
+            jq -r '[.[]
+                    | select(.draft == false and .prerelease == false)
+                    | .tag_name
+                    | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))]
+                   | sort_by(.[1:] | split(".") | map(tonumber))
+                   | last // ""' \
+              < /tmp/releases.json
+          )
+          if [ -z "$LATEST_TAG" ]; then
+            echo "::error::No concrete vX.Y.Z release found for anthropics/claude-code-action; refusing to pin to a moving tag"
+            exit 1
+          fi
+          RELEASE_URL=$(jq -r --arg t "$LATEST_TAG" '.[] | select(.tag_name == $t) | .html_url' < /tmp/releases.json)
+          RELEASE_NOTES=$(jq -r --arg t "$LATEST_TAG" '.[] | select(.tag_name == $t) | .body // "No release notes provided."' < /tmp/releases.json)
           echo "Latest release tag: $LATEST_TAG"
           echo "Release URL: $RELEASE_URL"
           echo "$RELEASE_NOTES" > /tmp/release_notes.md
@@ -90,9 +111,22 @@ jobs:
             echo "Update available: $CURRENT_SHAS → $LATEST"
             echo "needs_update=true" >> "$GITHUB_OUTPUT"
           fi
+      - name: Check workflow update credentials
+        id: credentials
+        if: steps.check.outputs.needs_update == 'true'
+        env:
+          WORKFLOW_PAT: ${{ secrets.WORKFLOW_PAT }}
+        run: |
+          SANITIZED_PAT="${WORKFLOW_PAT//[[:space:]]/}"
+          if [ -n "$SANITIZED_PAT" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::WORKFLOW_PAT is not configured (or is blank); skipping the workflow update PR."
+          fi
       - name: Build PR description
         id: body
-        if: steps.check.outputs.needs_update == 'true'
+        if: steps.credentials.outputs.available == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CURRENT_SHAS: ${{ steps.current.outputs.current_shas }}
@@ -135,7 +169,7 @@ jobs:
             echo "> _This PR was created automatically by the [update-claude-code-action](${GITHUB_SERVER_URL_VAL}/${GITHUB_REPOSITORY_VAL}/actions/workflows/update-claude-code-action.yml) workflow._"
           } > /tmp/pr_body.md
       - name: Update SHA in workflow files
-        if: steps.check.outputs.needs_update == 'true'
+        if: steps.credentials.outputs.available == 'true'
         env:
           LATEST: ${{ steps.latest.outputs.latest_sha }}
           LATEST_TAG: ${{ steps.latest.outputs.latest_tag }}
@@ -149,10 +183,12 @@ jobs:
             fi
           done
       - name: Create Pull Request
-        if: steps.check.outputs.needs_update == 'true'
+        if: steps.credentials.outputs.available == 'true'
         uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v8.1.0
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # GITHUB_TOKEN cannot update workflow files; the PAT needs the
+          # repository workflows permission.
+          token: ${{ secrets.WORKFLOW_PAT }}
           branch: "chore/update-claude-code-action-${{ steps.latest.outputs.latest_tag }}"
           delete-branch: true
           commit-message: |
