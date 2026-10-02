@@ -11,6 +11,7 @@ Workflows that run automated checks on pull requests and commits.
 | Workflow                                     | Trigger      | Purpose                                                                                      | Status                                                                                          |
 | -------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | [`ci-pr-checks.yml`](./ci-pr-checks.yml)     | Pull Request | Validates installation, builds affected packages, runs linting, formatting checks, and tests | ![PR Checks](https://github.com/owner/repo/actions/workflows/ci-pr-checks.yml/badge.svg)        |
+| [Docs Check](./claude-docs-check.yml)        | PR / Manual  | Validates PR documentation and plugin versions; skips when Claude auth is unavailable        | ![Docs Check](https://github.com/owner/repo/actions/workflows/claude-docs-check.yml/badge.svg)  |
 | [`claude-welcome.yml`](./claude-welcome.yml) | PR Opened    | Posts welcome message from Claude to newly opened PRs                                        | ![Claude Welcome](https://github.com/owner/repo/actions/workflows/claude-welcome.yml/badge.svg) |
 
 **Key Features:**
