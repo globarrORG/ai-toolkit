@@ -1386,6 +1386,8 @@ Never use tags or branch names directly.
 
 **Every job running on non-macOS runners MUST have `bullfrogsec/bullfrog` as the FIRST step** - no exceptions.
 
+Codacy and CodeQL use audit mode; CodeQL skips Bullfrog for its macOS Swift runner. Both retain SHA-pinned actions and disable checkout credential persistence.
+
 This applies to ALL jobs, including:
 
 - Main workflow jobs (build, test, deploy)
