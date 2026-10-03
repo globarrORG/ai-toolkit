@@ -179,34 +179,43 @@ env:
   BUN_CONFIG_FILE: /dev/null
 
 jobs:
-  # jobs.<id>.if cannot see the secrets context, so authentication presence
-  # must be resolved inside a job (where secrets ARE available to env/steps)
-  # and passed downstream via outputs. Without this, docs-check would run
-  # unconditionally and hard-fail at "Validate Authentication" whenever a
-  # caller repo hasn't configured ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN,
-  # instead of skipping gracefully.
-  check-auth:
+  check-authentication:
     runs-on: ubuntu-latest
-    permissions: {}
+    permissions:
+      contents: read
     outputs:
       has_auth: ${{ steps.check.outputs.has_auth }}
     steps:
-      - name: Check Claude authentication availability
+      # Security scanning — must be the first step in every non-macOS job.
+      - name: Security Scan
+        uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
+        with:
+          egress-policy: block
+          allowed-domains: |
+            release-assets.githubusercontent.com
+            raw.githubusercontent.com
+            api.anthropic.com
+            claude.ai
+            downloads.claude.ai
+            registry.npmjs.org
+          enable-sudo: false
+
+      - name: Check authentication availability
         id: check
         env:
-          HAS_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
-          HAS_CLAUDE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+          API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
-          if [ "$HAS_ANTHROPIC_API_KEY" = "true" ] || [ "$HAS_CLAUDE_OAUTH_TOKEN" = "true" ]; then
+          if [ -n "$API_KEY" ] || [ -n "$OAUTH_TOKEN" ]; then
             echo "has_auth=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::No Claude authentication configured (ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN). Skipping documentation check."
             echo "has_auth=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping PR documentation validation because no Claude authentication is configured."
           fi
 
   docs-check:
-    needs: check-auth
-    if: needs.check-auth.outputs.has_auth == 'true'
+    needs: check-authentication
+    if: needs.check-authentication.outputs.has_auth == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.timeout_minutes }}
     env:
@@ -287,6 +296,7 @@ jobs:
 
       # Download validate-claude-auth action if needed
       - name: Ensure validate-claude-auth action exists
+        if: false
         env:
           TOOLKIT_REF: ${{ inputs.toolkit_ref }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -318,10 +328,12 @@ jobs:
           fi
 
       - name: Validate Authentication
+        if: false
         uses: ./.github/actions/validate-claude-auth
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          allow-missing-auth: 'true'
 
       # Get PR info
       - name: Get PR Info
