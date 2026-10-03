@@ -181,6 +181,11 @@ jobs:
         github.event_name == 'workflow_dispatch'
       )
     runs-on: ubuntu-latest
+    env:
+      # Private GitHub Packages access is not available in every repository
+      # context. Expose secret presence here because step-level `if:` cannot
+      # read secrets directly.
+      HAS_REVIEW_CLI_TOKEN: ${{ secrets.REVIEW_CLI_TOKEN != '' }}
     permissions:
       contents: read # checkout the local composite action
       packages: read # pull @uniswap/review-cli from GitHub Packages
@@ -233,6 +238,7 @@ jobs:
 
       - name: Install review-cli
         id: install-review-cli
+        if: env.HAS_REVIEW_CLI_TOKEN == 'true'
         uses: ./.github/actions/install_review_cli
         with:
           # Pinned, never `@latest`, so an upstream release cannot change
@@ -272,10 +278,15 @@ jobs:
 
       - name: Decide whether to run
         id: gate
+        if: env.HAS_REVIEW_CLI_TOKEN == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REVIEW_CLI_BIN: ${{ steps.install-review-cli.outputs.bin-path }}
         run: '"$REVIEW_CLI_BIN/review-cli" triage --from-github-actions'
+
+      - name: Note review-cli is unavailable
+        if: env.HAS_REVIEW_CLI_TOKEN != 'true'
+        run: echo "::notice::AI review skipped because REVIEW_CLI_TOKEN is not configured. Add a token with packages:read access to @uniswap/review-cli to enable reviews."
 
       # A declining gate is otherwise a fully green, fully PR-invisible
       # no-review: `review` is skipped and nothing annotates why. That is
