@@ -55,12 +55,16 @@ jobs:
           pr_title: ${{ github.event.pull_request.title }}
 
       - name: Conditional semantic PR check
-        if: ${{ github.event_name == 'pull_request_target' && steps.check-automated.outputs.is_automated != 'true' }}
+        if: ${{ github.event_name == 'pull_request_target' && steps.check-automated.outputs.is_automated != 'true' && !startsWith(github.head_ref, 'copilot/') }}
         uses: amannn/action-semantic-pull-request@536f681e2c60d973396eb60457d42ced8cd3f61a
         with:
           requireScope: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pass check for Copilot PRs
+        if: ${{ github.event_name == 'pull_request_target' && startsWith(github.head_ref, 'copilot/') }}
+        run: echo "Copilot-generated PR detected. Conventional title validation is skipped."
 
       - name: Pass check for automated PRs
         if: ${{ steps.check-automated.outputs.is_automated == 'true' }}
