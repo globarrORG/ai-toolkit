@@ -510,7 +510,7 @@ This is how ai-toolkit reviews its **own** PRs. It runs [`@uniswap/review-cli`](
 
 **Why the two coexist:** `_claude-code-review.yml` is a published product with 10+ external consumers pinned to it by commit SHA. It stays. This repo simply consumes the shared reviewer that `Uniswap/universe` and `Uniswap/backend` already use, so improvements to review quality land in one place instead of three.
 
-**GitHub Packages authentication:** `@uniswap/review-cli` is private to `Uniswap/internal-tools`, so the workflow must use the `REVIEW_CLI_TOKEN` repository secret with `packages:read` access to that package. The workflow's `GITHUB_TOKEN` does not have access to this package.
+**GitHub Packages authentication:** `@uniswap/review-cli` is private to `Uniswap/internal-tools`, so configure `REVIEW_CLI_TOKEN` with `packages:read` access to that package in both the repository's Actions secrets and Dependabot secrets. Dependabot-triggered runs cannot access Actions secrets. The workflow's `GITHUB_TOKEN` does not have access to this package.
 
 **Architecture — two jobs plus three supporting jobs:**
 
@@ -536,7 +536,7 @@ Two mechanics that are easy to get wrong:
 - **`ref:` must be explicit.** Omitting `ref:` does **not** mean "the default branch". `actions/checkout` falls back to `GITHUB_SHA`, which on a `pull_request` event is the _merge commit_ (base + head) and on `issue_comment` / `workflow_dispatch` is the default branch. An unpinned "trusted" checkout is therefore head-influenced on exactly the trigger that matters most. The trusted checkout pins `ref: ${{ github.event.repository.default_branch }}`.
 - **Order matters.** The trusted checkout must come **after** the PR-head checkout, because `actions/checkout` runs `git clean -ffdx` on its target and a workspace-root checkout running second would delete `.review-tooling/`.
 
-The `triage` job's checkout is deliberately **not** pinned this way. It holds no `CLAUDE_CODE_OAUTH_TOKEN` and runs no agent, so the worst case is a PR altering its own review eligibility rather than executing code with a credential. Note that the fork guard in that job deliberately does not read config — it resolves the head repo through the API — so it cannot be disabled from the PR branch.
+The `triage` job also checks out its credential-bearing installer from the explicit default-branch ref into `.review-tooling/` before supplying `REVIEW_CLI_TOKEN`. Its `.claude/review.yml` is still read from the PR merge commit, so a PR can alter its own review eligibility; the job holds no `CLAUDE_CODE_OAUTH_TOKEN` and runs no agent. The fork guard deliberately does not read config — it resolves the head repo through the API — so it cannot be disabled from the PR branch.
 
 **Consequence, and it is intended:** edits to `.claude/review.yml` or `.claude/agents/*` take effect only once merged. A PR cannot review itself with a reviewer set it wrote. Iterate locally with `review-cli dev` rather than pushing a commit per change. There is no flag to point the CLI at a config outside the repo root — `loadConfig(repoRoot)` takes only a root — which is why the fix is a file copy rather than an argument.
 
@@ -563,7 +563,7 @@ The step ends by asserting `git status --porcelain` is empty and warns if it is 
 - `skip.drafts` falls back to `true`, which would skip the `claude[bot]` draft PRs the autonomous-task workflow opens
 - branch and author skips are not applied at all
 
-So the `triage` job does a sparse checkout of `.github/actions` and `.claude`, and runs the gate **without** `--skip-config`. A `Verify review config is present` step fails the job if `.claude/review.yml` is missing, because `loadConfig` treats a missing file as "use defaults" and logs nothing — a botched checkout would otherwise silently stop reviewing dependency PRs, breaking auto-merge on a green run.
+So the `triage` job checks out `.claude` from the PR merge commit and the installer separately from the trusted default branch, then runs the gate **without** `--skip-config`. A `Verify review config is present` step fails the job if `.claude/review.yml` is missing, because `loadConfig` treats a missing file as "use defaults" and logs nothing — a botched checkout would otherwise silently stop reviewing dependency PRs, breaking auto-merge on a green run.
 
 **Configuration lives in the repo, not in workflow inputs:**
 
@@ -571,7 +571,7 @@ So the `triage` job does a sparse checkout of `.github/actions` and `.claude`, a
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `.claude/review.yml`                 | Model, per-agent budget, skip policy, investigation gate, diff summarization, triage staffing                                                       |
 | `.claude/agents/*-reviewer.md`       | Repo-specific reviewers, **added to** review-cli's bundled set (not replacing it)                                                                   |
-| `.github/actions/install_review_cli` | Installs the CLI from GitHub Packages into an isolated `$RUNNER_TEMP` dir. In the `review` job it is resolved from the trusted ref, not the PR head |
+| `.github/actions/install_review_cli` | Installs the CLI from GitHub Packages into an isolated `$RUNNER_TEMP` dir. Both jobs resolve it from the trusted ref, not the PR head |
 | `vars.REVIEW_CLI_VERSION`            | CLI version override; falls back to the pin in the workflow. Never `@latest`                                                                        |
 | `secrets.CLAUDE_CODE_OAUTH_TOKEN`    | **Required.** `ANTHROPIC_API_KEY` is deliberately never forwarded to the review job                                                                 |
 | `secrets.DATADOG_API_KEY`            | Optional. Enables CI Visibility stamping; the step is skipped when unset                                                                            |
