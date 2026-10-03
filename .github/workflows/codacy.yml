@@ -22,8 +22,7 @@ on:
   schedule:
     - cron: '28 17 * * 2'
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   codacy-security-scan:
@@ -34,7 +33,10 @@ jobs:
     name: Codacy Security Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
+      - name: Bullfrog
+        uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
+        with:
+          egress-policy: audit
 
       # Checkout the repository to the GitHub Actions runner
       - name: Checkout code
@@ -44,7 +46,7 @@ jobs:
 
       # Execute Codacy Analysis CLI and generate a SARIF output with the security issues identified during the analysis
       - name: Run Codacy Analysis CLI
-        uses: codacy/codacy-analysis-cli-action@d840f886c4bd4edc059706d09c6a1586111c540b
+        uses: codacy/codacy-analysis-cli-action@d840f886c4bd4edc059706d09c6a1586111c540b # v1.1.0
         with:
           # Check https://github.com/codacy/codacy-analysis-cli#project-token to get your project token from your Codacy repository
           # You can also omit the token and run the tools that support default configurations
