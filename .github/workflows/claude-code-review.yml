@@ -87,6 +87,29 @@ concurrency:
 permissions: {}
 
 jobs:
+  # GitHub Packages credentials are optional at the repository level. Check
+  # their presence before triage so an unconfigured secret skips review instead
+  # of failing the CLI install with a 401.
+  check-review-cli-auth:
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      available: ${{ steps.check.outputs.available }}
+    steps:
+      - uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
+
+      - name: Check review-cli package token
+        id: check
+        env:
+          REVIEW_CLI_TOKEN: ${{ secrets.REVIEW_CLI_TOKEN }}
+        run: |
+          if [ -n "$REVIEW_CLI_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::AI review skipped because REVIEW_CLI_TOKEN is not configured."
+          fi
+
   # Classify automated PRs. review-cli's own skip policy covers branch
   # prefixes and authors (see .claude/review.yml), but it has no notion of
   # PR *titles* — and this repo's release and sync automation is
@@ -130,7 +153,7 @@ jobs:
   # parse, and workflow_dispatch pr_number extraction.
   triage:
     name: Triage
-    needs: [check-automated]
+    needs: [check-automated, check-review-cli-auth]
     # Coarse event gate: a cheap early exit so unrelated comments and
     # untrusted commenters never pay for runner startup. `review-cli
     # triage` below is the authoritative policy check (it enforces the
@@ -151,7 +174,9 @@ jobs:
     # autonomous-task workflow opens DRAFT PRs and those must still be
     # reviewed on open, not only once a human marks them ready.
     if: |
-      always() && (
+      always() &&
+      needs.check-review-cli-auth.outputs.available == 'true' &&
+      (
         (
           github.event_name == 'pull_request' &&
           needs.check-automated.result == 'success' &&
