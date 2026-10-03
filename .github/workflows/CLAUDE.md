@@ -26,7 +26,7 @@ Contains GitHub Actions workflow definitions that automate CI/CD, code quality, 
 
 ### PR Title Validation (1 workflow)
 
-- `ci-check-pr-title.yml` - Validates PR titles follow conventional commit format
+- `ci-check-pr-title.yml` - Validates PR titles follow conventional commit format, skipping semantic checks for automated PRs and `copilot/*` branches
 
 ### Dependency Management (3 workflows)
 
@@ -89,7 +89,7 @@ You can authenticate with Claude using either method:
 1. **API Key (Traditional):** Set `ANTHROPIC_API_KEY` with your Anthropic API key
 2. **OAuth Token (Pro/Max Users):** Set `CLAUDE_CODE_OAUTH_TOKEN` with a token generated via `claude setup-token`
 
-If both are provided, OAuth token takes precedence. At least one authentication method must be configured.
+If both are provided, OAuth token takes precedence. At least one authentication method must be configured; the workflow fails authentication validation if neither is set.
 
 > **Important:** The [Claude GitHub App](https://github.com/apps/claude) must be installed on your repository for these workflows to function. This is required by Anthropic's official Claude Code GitHub Action.
 
@@ -778,6 +778,8 @@ The workflow uploads artifacts for debugging (retained for 7 days):
 
 This workflow generates PR titles and descriptions using Claude AI with the following features:
 
+When neither Claude authentication secret is available, its preflight job completes successfully and skips metadata generation. This lets repositories adopt the workflow before configuring `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` without failing pull requests.
+
 **Content Preservation with Markers:**
 
 The workflow wraps generated descriptions in HTML comment markers to enable selective updates:
@@ -852,8 +854,8 @@ The `generation_mode` input is a comma-separated list that controls what the wor
 
 | Secret                    | Required                                      | Description                                                                                                                               |
 | ------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`       | Yes (unless `CLAUDE_CODE_OAUTH_TOKEN` is set) | Anthropic API key for Claude access                                                                                                       |
-| `CLAUDE_CODE_OAUTH_TOKEN` | No (alternative to `ANTHROPIC_API_KEY`)       | Claude Code OAuth token for authentication. When provided, takes precedence over `ANTHROPIC_API_KEY`. Generate with `claude setup-token`. |
+| `ANTHROPIC_API_KEY`       | No                                            | Anthropic API key for Claude access                                                                                                       |
+| `CLAUDE_CODE_OAUTH_TOKEN` | No                                            | Claude Code OAuth token for authentication. When provided, takes precedence over `ANTHROPIC_API_KEY`. Generate with `claude setup-token`. |
 
 **Authentication Methods:**
 
@@ -862,7 +864,7 @@ You can authenticate with Claude using either method:
 1. **API Key (Traditional):** Set `ANTHROPIC_API_KEY` with your Anthropic API key
 2. **OAuth Token (Pro/Max Users):** Set `CLAUDE_CODE_OAUTH_TOKEN` with a token generated via `claude setup-token`
 
-If both are provided, OAuth token takes precedence. At least one authentication method must be configured.
+If both are provided, OAuth token takes precedence. If neither is configured, PR metadata generation is skipped successfully.
 
 > **Important:** The [Claude GitHub App](https://github.com/apps/claude) must be installed on your repository for these workflows to function. This is required by Anthropic's official Claude Code GitHub Action.
 >
@@ -1067,6 +1069,7 @@ These workflows are prefixed with two `__` and are only used within this reposit
 - `claude-code-review.yml` - Automated code reviews via `@uniswap/review-cli`
 - `claude-welcome.yml` - New PR welcomes
 - `generate-pr-title-description.yml` - Auto-generated PR titles and descriptions
+  - The preflight job uses no permissions; the reusable metadata job has only the read, pull-request write, and OIDC permissions it requires.
 - `release-update-production.yml` - Production sync automation
 - `update-action-versions.yml` - Automated GitHub Actions version updates (scheduled)
 
@@ -1381,6 +1384,8 @@ Never use tags or branch names directly.
 ### Bullfrog Security Scanning (CRITICAL)
 
 **Every job running on non-macOS runners MUST have `bullfrogsec/bullfrog` as the FIRST step** - no exceptions.
+
+Codacy and CodeQL use audit mode; CodeQL skips Bullfrog for its macOS Swift runner. Both retain SHA-pinned actions and disable checkout credential persistence.
 
 This applies to ALL jobs, including:
 

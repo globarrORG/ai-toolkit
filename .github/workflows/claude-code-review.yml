@@ -272,7 +272,7 @@ jobs:
       # would silently stop reviewing dependency PRs (breaking
       # auto-merge) with a green run and no signal. Fail loudly instead.
       - name: Verify review config is present
-        if: steps.install-review-cli.outcome == 'success'
+        if: steps.install-review-cli.outcome == 'success' && steps.install-review-cli.outputs.bin-path != ''
         run: |
           set -euo pipefail
           if [ ! -s .claude/review.yml ]; then
