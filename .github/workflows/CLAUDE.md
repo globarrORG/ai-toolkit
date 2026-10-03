@@ -793,6 +793,8 @@ The workflow uploads artifacts for debugging (retained for 7 days):
 
 ### PR Metadata Generation (`_generate-pr-metadata.yml`)
 
+**Caller-side auth gate:** `generate-pr-title-description.yml` runs a `check-auth` job before calling this reusable workflow. `validate-claude-auth` (used inside `_generate-pr-metadata.yml`) hard-fails the job when neither `ANTHROPIC_API_KEY` nor `CLAUDE_CODE_OAUTH_TOKEN` is configured, and a reusable workflow's inputs/secrets aren't visible to the caller's job-level `if:` (no `secrets` context there). `check-auth` checks secret presence itself and exposes `has_auth`, so `generate-metadata` only runs `_generate-pr-metadata.yml` when `needs.check-auth.outputs.has_auth == 'true'` — repos/forks without those secrets skip gracefully instead of failing on every PR.
+
 This workflow generates PR titles and descriptions using Claude AI with the following features:
 
 When neither Claude authentication secret is available, its preflight job completes successfully and skips metadata generation. This lets repositories adopt the workflow before configuring `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` without failing pull requests.
