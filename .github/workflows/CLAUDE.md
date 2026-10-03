@@ -867,13 +867,15 @@ The repository's `generate-pr-title-description.yml` workflow checks for either 
 >
 > **Note:** If you need assistance installing the Claude GitHub App, please open an issue at [GitHub Issues](https://github.com/Uniswap/ai-toolkit/issues).
 >
-> **Required permissions:** The caller workflow must include `id-token: write` permission (needed by Claude Code Action for ID token creation):
+> **Required permissions:** The job that calls the reusable workflow must include these permissions (including `id-token: write`, needed by Claude Code Action for ID token creation):
 >
 > ```yaml
-> permissions:
->   contents: read
->   pull-requests: write
->   id-token: write
+> jobs:
+>   generate-metadata:
+>     permissions:
+>       contents: read
+>       pull-requests: write
+>       id-token: write
 > ```
 
 **Usage example (API Key):**
