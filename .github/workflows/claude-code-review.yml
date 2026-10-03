@@ -204,8 +204,8 @@ jobs:
     steps:
       - uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
 
-      # Sparse checkout of just `.claude/` from the event ref. The gate
-      # needs `.claude/review.yml` for the skip policy.
+      # Sparse checkout of `.claude/` for the skip policy. The installer is
+      # loaded separately from a trusted ref below.
       #
       # Do NOT drop `.claude` and add `--skip-config` to the gate below.
       # `--skip-config` passes NO policy at all, which is not the same as
@@ -223,12 +223,11 @@ jobs:
       # a PR changing its own review eligibility, not code execution with a
       # credential. The fork guard below deliberately does not rely on
       # config — it resolves the head repo through the API instead.
-      - name: Checkout repository config
+      - name: Checkout repository config for triage
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-          sparse-checkout: |
-            .claude
+          sparse-checkout: .claude
           sparse-checkout-cone-mode: false
 
       - name: Check review-cli token
@@ -671,6 +670,7 @@ jobs:
       # short-circuit every later step (they default to `if: success()`)
       # and Post would have no last-run.json to recover from.
       - name: Pre — running sticky placeholder
+        if: steps.install-review-cli.outputs.bin-path != ''
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -727,6 +727,7 @@ jobs:
         # step start, the job timeout from job start. Measured setup was 35s,
         # leaving ~7 minutes for Post and the uploads (which took 13s).
         timeout-minutes: 17
+        if: steps.install-review-cli.outputs.bin-path != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

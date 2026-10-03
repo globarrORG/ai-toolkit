@@ -7,6 +7,11 @@ on:
       - opened
       - edited
       - synchronize
+  workflow_run:
+    workflows:
+      - "Claude: Generate PR Title & Description"
+    types:
+      - completed
 
 permissions:
   contents: read
@@ -19,9 +24,10 @@ concurrency:
 jobs:
   check-pr-title:
     name: 🔡 Check PR Title
+    if: ${{ github.event_name == 'pull_request_target' }}
     runs-on: ubuntu-latest
     env:
-      PR_HEAD_REF: ${{ github.head_ref || github.event.pull_request.head.ref }}
+      PR_HEAD_REF: ${{ github.event.pull_request.head.ref || github.head_ref }}
     steps:
       - uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3
         with:
@@ -65,4 +71,54 @@ jobs:
         env:
           SKIP_REASON: ${{ steps.check-automated.outputs.is_automated == 'true' && steps.check-automated.outputs.skip_reason || 'GitHub Copilot coding agent branch (copilot/* prefix); title is machine-generated from the task description' }}
         run: |
-          echo "PR title validation skipped: ${SKIP_REASON:-Copilot-generated branch}."
+          echo "Automated PR detected: $SKIP_REASON. This check is automatically passed."
+
+  check-generated-pr-title:
+    name: 🔡 Check PR Title
+    if: >-
+      ${{
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.pull_requests[0].number > 0
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3
+        with:
+          egress-policy: block
+      - name: Checkout repository (for composite action)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: .github/actions
+          sparse-checkout-cone-mode: false
+      - name: Load generated PR metadata
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" \
+            --jq '"branch_name=\(.head.ref)\npr_title=\(.title)"' >> "$GITHUB_OUTPUT"
+      - name: Check for automated PR
+        id: check-automated
+        uses: ./.github/actions/check-automated-pr
+        with:
+          branch_name: ${{ steps.pr.outputs.branch_name }}
+          pr_title: ${{ steps.pr.outputs.pr_title }}
+      - name: Validate generated PR title
+        if: ${{ steps.check-automated.outputs.is_automated != 'true' && !startsWith(steps.pr.outputs.branch_name, 'copilot/') }}
+        env:
+          PR_TITLE: ${{ steps.pr.outputs.pr_title }}
+        run: |
+          if [[ ! "$PR_TITLE" =~ ^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)\([^()]+\)!?:[[:space:]]+.+$ ]]; then
+            echo "::error::Generated PR title does not follow the required conventional format."
+            exit 1
+          fi
+      - name: Pass check for automated PRs
+        if: ${{ steps.check-automated.outputs.is_automated == 'true' || startsWith(steps.pr.outputs.branch_name, 'copilot/') }}
+        run: echo "Automated PR detected. This check is automatically passed."

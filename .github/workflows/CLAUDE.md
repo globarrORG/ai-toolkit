@@ -26,7 +26,7 @@ Contains GitHub Actions workflow definitions that automate CI/CD, code quality, 
 
 ### PR Title Validation (1 workflow)
 
-- `ci-check-pr-title.yml` - Validates PR titles follow conventional commit format and skips semantic checks for automated PRs plus `copilot/*` branches via `check-automated-pr`
+- `ci-check-pr-title.yml` - Validates PR titles follow conventional commit format, with semantic checks skipped for automated PRs and `copilot/*` coding-agent branches using `github.event.pull_request.head.ref` (fallback `github.head_ref`) for reliable branch detection
 
 ### Dependency Management (3 workflows)
 
@@ -526,7 +526,7 @@ Two mechanics that are easy to get wrong:
 - **`ref:` must be explicit.** Omitting `ref:` does **not** mean "the default branch". `actions/checkout` falls back to `GITHUB_SHA`, which on a `pull_request` event is the _merge commit_ (base + head) and on `issue_comment` / `workflow_dispatch` is the default branch. An unpinned "trusted" checkout is therefore head-influenced on exactly the trigger that matters most. The trusted checkout pins `ref: ${{ github.event.repository.default_branch }}`.
 - **Order matters.** The trusted checkout must come **after** the PR-head checkout, because `actions/checkout` runs `git clean -ffdx` on its target and a workspace-root checkout running second would delete `.review-tooling/`.
 
-The `triage` job's checkout is deliberately **not** pinned this way. It holds no `CLAUDE_CODE_OAUTH_TOKEN` and runs no agent, so the worst case is a PR altering its own review eligibility rather than executing code with a credential. Note that the fork guard in that job deliberately does not read config — it resolves the head repo through the API — so it cannot be disabled from the PR branch.
+The `triage` job's configuration checkout is deliberately **not** pinned this way. It runs no agent, so the worst case is a PR altering its own review eligibility. The review-cli installer is checked out separately from the trusted default branch before the token is passed to it. The fork guard deliberately does not read config — it resolves the head repo through the API — so it cannot be disabled from the PR branch.
 
 **Consequence, and it is intended:** edits to `.claude/review.yml` or `.claude/agents/*` take effect only once merged. A PR cannot review itself with a reviewer set it wrote. Iterate locally with `review-cli dev` rather than pushing a commit per change. There is no flag to point the CLI at a config outside the repo root — `loadConfig(repoRoot)` takes only a root — which is why the fix is a file copy rather than an argument.
 
@@ -555,21 +555,21 @@ The auth-failure detector in `install_review_cli` uses `grep -E`; keep the match
 - `skip.drafts` falls back to `true`, which would skip the draft PRs `claude[bot]` opens
 - branch and author skips are not applied at all
 
-So the `triage` job does a sparse checkout of `.github/actions` and `.claude`, and runs the gate **without** `--skip-config`. A `Verify review config is present` step fails the job if `.claude/review.yml` is missing, because `loadConfig` treats a missing file as "use defaults" and logs nothing — a botched checkout would otherwise silently stop reviewing dependency PRs, breaking auto-merge on a green run.
+So the `triage` job sparsely checks out `.claude` and runs the gate **without** `--skip-config`; it checks out the installer separately from the trusted default branch. A `Verify review config is present` step fails the job if `.claude/review.yml` is missing, because `loadConfig` treats a missing file as "use defaults" and logs nothing — a botched checkout would otherwise silently stop reviewing dependency PRs, breaking auto-merge on a green run.
 
-**Gotcha — triage treats `review-cli` install failures as a skip, not a hard failure.** This repository depends on a private `@uniswap/review-cli` package from GitHub Packages. Forks and personal copies of the repo often have a `GITHUB_TOKEN` that can run the workflow but cannot read that package, which surfaces as a 403 during the install step. The triage job therefore marks the install step `continue-on-error`, emits a notice explaining that AI review was skipped because the package was unavailable, and gates both config validation and `review-cli triage` itself on `steps.install-review-cli.outcome == 'success'`. That keeps the workflow green while still leaving an explicit audit trail in the run log.
+**Gotcha — package-access failures skip triage; other install failures fail the job.** This repository depends on a private `@uniswap/review-cli` package from GitHub Packages. The installer treats package-access failures as unavailable and leaves `bin-path` empty, so the triage job emits a notice and skips config validation and `review-cli triage`. Other installer failures remain failures so an unexpected installation problem is visible.
 
 **Configuration lives in the repo, not in workflow inputs:**
 
-| File / setting                       | Controls                                                                                                                                                                                                    |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.claude/review.yml`                 | Model, per-agent budget, skip policy, investigation gate, diff summarization, triage staffing                                                                                                               |
-| `.claude/agents/*-reviewer.md`       | Repo-specific reviewers, **added to** review-cli's bundled set (not replacing it)                                                                                                                           |
-| `.github/actions/install_review_cli` | Installs the CLI from GitHub Packages into an isolated `$RUNNER_TEMP` dir. In the `review` job it is resolved from the trusted ref, not the PR head                                                         |
-| `vars.REVIEW_CLI_VERSION`            | CLI version override; falls back to the pin in the workflow. Never `@latest`                                                                                                                                |
-| `secrets.REVIEW_CLI_TOKEN`           | Optional. A token with `packages:read` access. When unset, triage reports a notice and skips AI review; when configured but package access is unavailable, triage continues with a notice and skips review. |
-| `secrets.CLAUDE_CODE_OAUTH_TOKEN`    | **Required.** `ANTHROPIC_API_KEY` is deliberately never forwarded to the review job                                                                                                                         |
-| `secrets.DATADOG_API_KEY`            | Optional. Enables CI Visibility stamping; the step is skipped when unset                                                                                                                                    |
+| File / setting                       | Controls                                                                                                                                                                                                                                                                                |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.claude/review.yml`                 | Model, per-agent budget, skip policy, investigation gate, diff summarization, triage staffing                                                                                                                                                                                           |
+| `.claude/agents/*-reviewer.md`       | Repo-specific reviewers, **added to** review-cli's bundled set (not replacing it)                                                                                                                                                                                                       |
+| `.github/actions/install_review_cli` | Installs the CLI from GitHub Packages into an isolated `$RUNNER_TEMP` dir. In both `triage` and `review` jobs it is resolved from the trusted default branch, not the PR head                                                                                                           |
+| `vars.REVIEW_CLI_VERSION`            | CLI version override; falls back to the pin in the workflow. Never `@latest`                                                                                                                                                                                                            |
+| `secrets.REVIEW_CLI_TOKEN`           | Optional. A token with `packages:read` access; when absent or unable to access the package, the triage job reports a notice and skips AI review successfully. The installer also treats Bun's "403 but no installed package" path as unavailable review-cli rather than a hard failure. |
+| `secrets.CLAUDE_CODE_OAUTH_TOKEN`    | **Required.** `ANTHROPIC_API_KEY` is deliberately never forwarded to the review job                                                                                                                                                                                                     |
+| `secrets.DATADOG_API_KEY`            | Optional. Enables CI Visibility stamping; the step is skipped when unset                                                                                                                                                                                                                |
 
 **Repo-specific reviewers.** review-cli ships 11 bundled agents: security, correctness, patterns, dependency-upgrade, and general reviewers; contract-security and defi-risk reviewers (neither applicable here, see `triage.guidance`); stack-security-analyst and stack-synthesis for stacked PRs; plus triage and synthesis. ai-toolkit adds two:
 
@@ -1089,7 +1089,7 @@ These workflows are prefixed with two `__` and are only used within this reposit
 ### Consumer Workflows
 
 - `ci-pr-checks.yml` - Main PR validation pipeline
-- `ci-check-pr-title.yml` - PR title format validation; semantic validation is skipped for automated PRs (`check-automated-pr`) and for `copilot/*` coding-agent branches, whose titles are machine-generated from the task description rather than authored by a human contributor. The workflow resolves branch names through `github.head_ref || github.event.pull_request.head.ref` so Copilot-branch detection remains reliable.
+- `ci-check-pr-title.yml` - PR title format validation; semantic validation is skipped for automated PRs (`check-automated-pr`) and for `copilot/*` coding-agent branches (resolved from `github.event.pull_request.head.ref`, with fallback to `github.head_ref`), whose titles are machine-generated from the task description. A `workflow_run` follow-up validates titles generated by the metadata workflow because `GITHUB_TOKEN` edits do not emit another pull-request event.
 - `claude-code.yml` - Enables @claude mentions
 - `claude-code-review.yml` - Automated code reviews via `@uniswap/review-cli`
 - `claude-welcome.yml` - New PR welcomes
