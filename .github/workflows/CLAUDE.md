@@ -25,7 +25,7 @@ Contains GitHub Actions workflow definitions that automate CI/CD, code quality, 
 
 ### PR Title Validation (1 workflow)
 
-- `ci-check-pr-title.yml` - Validates PR titles follow conventional commit format (semantic validation runs on `pull_request_target`; `workflow_run` trigger is follow-up only)
+- `ci-check-pr-title.yml` - Conventional PR title validation (`pull_request_target` only; skips Copilot branches; `workflow_run` is follow-up only)
 
 ### Autonomous Task Processing (3 workflows)
 
@@ -568,7 +568,7 @@ So the `triage` job does a sparse checkout of `.github/actions` and `.claude`, a
 | `.claude/agents/*-reviewer.md`       | Repo-specific reviewers, **added to** review-cli's bundled set (not replacing it)                                                                   |
 | `.github/actions/install_review_cli` | Installs the CLI from GitHub Packages into an isolated `$RUNNER_TEMP` dir. In the `review` job it is resolved from the trusted ref, not the PR head |
 | `vars.REVIEW_CLI_VERSION`            | CLI version override; falls back to the pin in the workflow. Never `@latest`                                                                        |
-| `secrets.REVIEW_CLI_TOKEN`           | **Required.** Must have `packages:read` access to the private `@uniswap/review-cli` package; `GITHUB_TOKEN` cannot access this cross-repository package |
+| `secrets.REVIEW_CLI_TOKEN`           | **Required.** Must have `packages:read` access to the private `@uniswap/review-cli` package; `GITHUB_TOKEN` cannot access it |
 | `secrets.CLAUDE_CODE_OAUTH_TOKEN`    | **Required.** `ANTHROPIC_API_KEY` is deliberately never forwarded to the review job                                                                 |
 | `secrets.DATADOG_API_KEY`            | Optional. Enables CI Visibility stamping; the step is skipped when unset                                                                            |
 
@@ -1264,7 +1264,7 @@ These workflows are prefixed with two `__` and are only used within this reposit
 ### Consumer Workflows
 
 - `ci-pr-checks.yml` - Main PR validation pipeline
-- `ci-check-pr-title.yml` - PR title format validation (semantic validation runs only on `pull_request_target`)
+- `ci-check-pr-title.yml` - PR title format validation (`pull_request_target` only; skips Copilot branches)
 - `claude-auto-tasks.yml` - Autonomous task processing from Linear (scheduled)
 - `claude-code.yml` - Enables @claude mentions
 - `claude-code-review.yml` - Automated code reviews via `@uniswap/review-cli`
