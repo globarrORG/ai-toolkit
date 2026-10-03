@@ -292,6 +292,7 @@ Due to GitHub Actions' flat directory requirement, we use naming prefixes to cat
 1. **Reusable Workflows**:
 
    - Use `workflow_call` trigger
+   - Set workflow-level permissions to `{}` and grant required scopes only to the caller job
    - Document all inputs/outputs clearly
    - Provide sensible defaults
    - Include fallback mechanisms

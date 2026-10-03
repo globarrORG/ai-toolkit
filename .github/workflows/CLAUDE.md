@@ -1462,6 +1462,8 @@ Dynamic interpolation via `${{ inputs.* }}`, `${{ github.* }}`, or environment v
 
 When calling reusable workflows via `uses:`, permissions defined in the reusable workflow's job are **NOT automatically inherited**. The **caller workflow** must explicitly define all required permissions.
 
+Set workflow-level permissions to `{}` and grant only the required scopes on the specific reusable-workflow caller job.
+
 **This is especially critical for npm OIDC trusted publishing**, which requires `id-token: write`:
 
 ```yaml
