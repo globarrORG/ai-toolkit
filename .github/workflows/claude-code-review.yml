@@ -202,8 +202,10 @@ jobs:
         github.event_name == 'workflow_dispatch'
       )
     runs-on: ubuntu-latest
+    env:
+      HAS_REVIEW_CLI_TOKEN: ${{ secrets.REVIEW_CLI_TOKEN != '' }}
     permissions:
-      contents: read # checkout the local composite action
+      contents: read # checkout review config and trusted installer
       packages: read # pull @uniswap/review-cli from GitHub Packages
       issues: write # 👀 reaction on issue_comment
       pull-requests: write # 👀 reaction on pull_request_review_comment
@@ -223,9 +225,9 @@ jobs:
     steps:
       - uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
 
-      # Sparse checkout of just the composite action and `.claude/`. The
-      # gate needs BOTH: the action to install the CLI, and
-      # `.claude/review.yml` for the skip policy.
+      # The gate needs `.claude/review.yml` for the skip policy. Keep the
+      # PR-controlled checkout limited to config; the credential-bearing
+      # installer is checked out separately from the trusted default branch.
       #
       # Do NOT drop `.claude` and add `--skip-config` to the gate below.
       # `--skip-config` passes NO policy at all, which is not the same as
@@ -234,28 +236,33 @@ jobs:
       # branch and author skips are simply not applied. Reading the real
       # config is what makes the policy in .claude/review.yml effective.
       #
-      # Deliberately NOT pinned to the default branch, unlike the review
-      # job's tooling checkout. With no `ref:` this resolves to GITHUB_SHA
-      # (the merge commit on `pull_request`, the default branch on
-      # issue_comment / workflow_dispatch), so a PR can influence the skip
-      # policy the gate reads. That is proportionate here: this job holds
-      # no CLAUDE_CODE_OAUTH_TOKEN and runs no agent, so the worst case is
-      # a PR changing its own review eligibility, not code execution with a
-      # credential. The fork guard below deliberately does not rely on
-      # config — it resolves the head repo through the API instead.
-      - name: Checkout repository (config + composite action)
+      # Deliberately NOT pinned to the default branch: this checkout supplies
+      # the PR-controlled skip policy. The credential-bearing installer is
+      # not sourced from this checkout.
+      - name: Checkout repository (review config)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
           sparse-checkout: |
-            .github/actions
             .claude
+          sparse-checkout-cone-mode: false
+
+      # The installer receives REVIEW_CLI_TOKEN, so it must come from the
+      # trusted default branch, never the PR-controlled event ref.
+      - name: Checkout trusted review-cli installer
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          path: .review-tooling
+          sparse-checkout: .github/actions/install_review_cli
           sparse-checkout-cone-mode: false
 
       - name: Install review-cli
         id: install-review-cli
+        if: env.HAS_REVIEW_CLI_TOKEN == 'true'
         continue-on-error: true
-        uses: ./.github/actions/install_review_cli
+        uses: ./.review-tooling/.github/actions/install_review_cli
         with:
           # Pinned, never `@latest`, so an upstream release cannot change
           # review behavior mid-PR. Override without a commit by setting
@@ -265,15 +272,12 @@ jobs:
           version: ${{ vars.REVIEW_CLI_VERSION || '1.10.1' }}
           github-token: ${{ secrets.REVIEW_CLI_TOKEN }}
 
-      # @uniswap/review-cli is published to Uniswap's GitHub Packages registry.
-      # On forks or repos where the GITHUB_TOKEN lacks packages:read access to
-      # that org, bun add returns 403 and the install step above fails. Treat
-      # this as a skip rather than a hard failure: the triage outputs will be
-      # empty, the review job will not run, and the workflow will pass green.
+      # If the configured package token cannot read @uniswap/review-cli,
+      # installation fails; treat that as a skip rather than a hard failure.
       - name: Skip review (review-cli unavailable)
         if: steps.install-review-cli.outcome == 'failure'
         run: |
-          echo "::notice::AI review skipped — @uniswap/review-cli could not be installed (packages:read on the Uniswap GitHub Packages registry is required). This is expected on forks of suckyourmomonoktagon/ai-toolkit."
+          echo "::notice::AI review skipped — @uniswap/review-cli could not be installed. REVIEW_CLI_TOKEN must have packages:read access to Uniswap GitHub Packages."
 
       # `loadConfig` treats a missing or invalid .claude/review.yml as
       # "use defaults" and says nothing. Those defaults skip dependabot,
@@ -281,7 +285,7 @@ jobs:
       # would silently stop reviewing dependency PRs (breaking
       # auto-merge) with a green run and no signal. Fail loudly instead.
       - name: Verify review config is present
-        if: steps.install-review-cli.outcome == 'success'
+        if: env.HAS_REVIEW_CLI_TOKEN == 'true' && steps.install-review-cli.outcome == 'success'
         run: |
           set -euo pipefail
           if [ ! -s .claude/review.yml ]; then
@@ -305,11 +309,15 @@ jobs:
 
       - name: Decide whether to run
         id: gate
-        if: steps.install-review-cli.outcome == 'success'
+        if: env.HAS_REVIEW_CLI_TOKEN == 'true' && steps.install-review-cli.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REVIEW_CLI_BIN: ${{ steps.install-review-cli.outputs.bin-path }}
         run: '"$REVIEW_CLI_BIN/review-cli" triage --from-github-actions'
+
+      - name: Note unavailable review CLI credential
+        if: env.HAS_REVIEW_CLI_TOKEN != 'true'
+        run: echo "::notice::Skipping AI review because REVIEW_CLI_TOKEN is not configured. Set it to a token with read access to @uniswap/review-cli in GitHub Packages."
 
       # A declining gate is otherwise a fully green, fully PR-invisible
       # no-review: `review` is skipped and nothing annotates why. That is
@@ -317,7 +325,7 @@ jobs:
       # so it is the one that must not look like a silent no-op. Mirrors what
       # `review-skipped` does for the check-automated path.
       - name: Note that the gate declined
-        if: steps.install-review-cli.outcome == 'success' && steps.gate.outputs.run != 'true'
+        if: env.HAS_REVIEW_CLI_TOKEN == 'true' && steps.install-review-cli.outcome == 'success' && steps.gate.outputs.run != 'true'
         run: echo "::notice::AI review skipped by review-cli triage. See the \"Decide whether to run\" step log for the policy that matched, and .claude/review.yml for the skip block."
 
       # Fork guard. The review job checks out PR head code and runs an
