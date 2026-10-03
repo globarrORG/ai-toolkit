@@ -642,6 +642,8 @@ This workflow validates that PR documentation is properly updated based on code 
 
 **Required Secrets:**
 
+The top-level workflow skips the documentation check when neither Claude credential is configured.
+
 | Secret                    | Required                                      | Description                                                                                                                               |
 | ------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `ANTHROPIC_API_KEY`       | Yes (unless `CLAUDE_CODE_OAUTH_TOKEN` is set) | Anthropic API key for Claude access                                                                                                       |
