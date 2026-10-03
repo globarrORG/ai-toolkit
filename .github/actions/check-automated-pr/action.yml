@@ -86,6 +86,7 @@ runs:
           IS_AUTOMATED="true"
           SKIP_REASON="Renovate dependency update branch (renovate/* prefix)"
           CATEGORY="deps"
+
         fi
 
         # ===========================================
