@@ -9,19 +9,22 @@ describe('PR title workflow regression checks', () => {
     const action = readFileSync(automatedPrActionPath, 'utf-8');
 
     expect(action).not.toContain('copilot/*');
+    expect(action).not.toMatch(/elif \[\[ "\$BRANCH_NAME" == copilot\/\* \]\]; then/);
+    expect(action).not.toContain('CATEGORY="copilot"');
   });
 
   it('skips semantic title validation for copilot branches', () => {
     const workflow = readFileSync(prTitleWorkflowPath, 'utf-8');
 
     expect(workflow).toContain(
-      'branch_name: ${{ github.event.pull_request.head.ref || github.head_ref }}'
+      'PR_HEAD_REF: ${{ github.event.pull_request.head.ref || github.head_ref }}'
+    );
+    expect(workflow).toContain('branch_name: ${{ env.PR_HEAD_REF }}');
+    expect(workflow).toContain(
+      "steps.check-automated.outputs.is_automated != 'true' && !startsWith(env.PR_HEAD_REF, 'copilot/')"
     );
     expect(workflow).toContain(
-      "steps.check-automated.outputs.is_automated != 'true' && !startsWith(github.event.pull_request.head.ref || github.head_ref, 'copilot/')"
-    );
-    expect(workflow).toContain(
-      "steps.check-automated.outputs.is_automated == 'true' || startsWith(github.event.pull_request.head.ref || github.head_ref, 'copilot/')"
+      "steps.check-automated.outputs.is_automated == 'true' || startsWith(env.PR_HEAD_REF, 'copilot/')"
     );
   });
 

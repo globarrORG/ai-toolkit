@@ -147,9 +147,9 @@ jobs:
     #
     # The draft policy lives here rather than in .claude/review.yml
     # (`skip.drafts: false`) because review-cli's draft skip is a single
-    # boolean and cannot express the claude[bot] carve-out: the
-    # autonomous-task workflow opens DRAFT PRs and those must still be
-    # reviewed on open, not only once a human marks them ready.
+    # boolean and cannot express the claude[bot] carve-out: claude[bot]
+    # opens DRAFT PRs and those must still be reviewed on open, not only
+    # once a human marks them ready.
     if: |
       always() && (
         (
@@ -230,27 +230,34 @@ jobs:
           sparse-checkout: .claude
           sparse-checkout-cone-mode: false
 
-      - name: Checkout trusted review installer
+      - name: Check review-cli token
+        if: env.HAS_REVIEW_CLI_TOKEN == 'true'
+        env:
+          REVIEW_CLI_TOKEN: ${{ secrets.REVIEW_CLI_TOKEN }}
+        run: |
+          if [ -z "$REVIEW_CLI_TOKEN" ]; then
+            echo "::error::REVIEW_CLI_TOKEN is not configured. Add the secret with packages:read access to install @uniswap/review-cli."
+            exit 1
+          fi
+
+      - name: Note missing review-cli token
+        if: env.HAS_REVIEW_CLI_TOKEN != 'true'
+        run: echo "::notice::AI review skipped because REVIEW_CLI_TOKEN is not configured."
+
+      - name: Checkout trusted installer action
+        if: env.HAS_REVIEW_CLI_TOKEN == 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
           path: .review-tooling
-          sparse-checkout: .github/actions/install_review_cli
+          sparse-checkout: |
+            .github/actions/install_review_cli
           sparse-checkout-cone-mode: false
-
-      - name: Check review-cli token
-        env:
-          REVIEW_CLI_TOKEN: ${{ secrets.REVIEW_CLI_TOKEN }}
-        run: |
-          if [ -z "$REVIEW_CLI_TOKEN" ]; then
-            echo "::notice::AI review skipped because REVIEW_CLI_TOKEN is not configured."
-          fi
 
       - name: Install review-cli
         id: install-review-cli
         if: env.HAS_REVIEW_CLI_TOKEN == 'true'
-        continue-on-error: true
         uses: ./.review-tooling/.github/actions/install_review_cli
         with:
           # Pinned, never `@latest`, so an upstream release cannot change
@@ -258,8 +265,12 @@ jobs:
           # the REVIEW_CLI_VERSION repo variable (Settings → Secrets and
           # variables → Actions → Variables). 1.10.x is required for the
           # `model.synthesis` key in .claude/review.yml.
-          version: ${{ vars.REVIEW_CLI_VERSION || '1.10.1' }}
+          version: ${{ vars.REVIEW_CLI_VERSION || '1.10.6' }}
           github-token: ${{ secrets.REVIEW_CLI_TOKEN }}
+
+      - name: Note that review-cli install failed
+        if: failure() && env.HAS_REVIEW_CLI_TOKEN == 'true' && steps.install-review-cli.outcome != 'success'
+        run: echo "::notice::review-cli installation failed. The required review job will fail; see the install step logs."
 
       # `loadConfig` treats a missing or invalid .claude/review.yml as
       # "use defaults" and says nothing. Those defaults skip dependabot,
@@ -267,7 +278,7 @@ jobs:
       # would silently stop reviewing dependency PRs (breaking
       # auto-merge) with a green run and no signal. Fail loudly instead.
       - name: Verify review config is present
-        if: env.HAS_REVIEW_CLI_TOKEN == 'true' && steps.install-review-cli.outcome == 'success'
+        if: steps.install-review-cli.outcome == 'success' && steps.install-review-cli.outputs.bin-path != ''
         run: |
           set -euo pipefail
           if [ ! -s .claude/review.yml ]; then
@@ -291,10 +302,7 @@ jobs:
 
       - name: Decide whether to run
         id: gate
-        if: |
-          env.HAS_REVIEW_CLI_TOKEN == 'true' &&
-          steps.install-review-cli.outcome == 'success' &&
-          steps.install-review-cli.outputs.bin-path != ''
+        if: steps.install-review-cli.outcome == 'success' && steps.install-review-cli.outputs.bin-path != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REVIEW_CLI_BIN: ${{ steps.install-review-cli.outputs.bin-path }}
@@ -313,9 +321,13 @@ jobs:
       # no-review: `review` is skipped and nothing annotates why. That is
       # exactly the path a mis-scoped skip prefix or a defaulted config takes,
       # so it is the one that must not look like a silent no-op. Mirrors what
-      # `review-skipped` does for the check-automated path.
+      # `review-skipped` does for the check-automated path. Excludes the
+      # install-failure case above, which already got its own notice.
       - name: Note that the gate declined
-        if: env.HAS_REVIEW_CLI_TOKEN == 'true' && steps.install-review-cli.outcome == 'success' && steps.gate.outputs.run != 'true'
+        if: |
+          steps.install-review-cli.outcome == 'success' &&
+          steps.install-review-cli.outputs.bin-path != '' &&
+          steps.gate.outputs.run != 'true'
         run: echo "::notice::AI review skipped by review-cli triage. See the \"Decide whether to run\" step log for the policy that matched, and .claude/review.yml for the skip block."
 
       # Fork guard. The review job checks out PR head code and runs an
@@ -597,7 +609,7 @@ jobs:
         id: install-review-cli
         uses: ./.review-tooling/.github/actions/install_review_cli
         with:
-          version: ${{ vars.REVIEW_CLI_VERSION || '1.10.1' }}
+          version: ${{ vars.REVIEW_CLI_VERSION || '1.10.6' }}
           github-token: ${{ secrets.REVIEW_CLI_TOKEN }}
 
       # Fail loudly rather than silently degrading: without a token the
