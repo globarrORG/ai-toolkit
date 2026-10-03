@@ -34,15 +34,18 @@ describe('Claude Code Review workflow regression checks', () => {
     const workflow = readYaml<WorkflowDocument>(reviewWorkflowPath);
     const steps = workflow.jobs.triage.steps;
     const installStep = steps.find((step) => step.id === 'install-review-cli');
-    const noteUnavailableStep = steps.find((step) => step.name === 'Note unavailable review-cli');
+    const noteUnavailableStep = steps.find(
+      (step) => step.name === 'Note that review-cli install failed'
+    );
 
     expect(installStep).toBeDefined();
     expect(installStep?.if).toBe("env.HAS_REVIEW_CLI_TOKEN == 'true'");
     expect(installStep?.['continue-on-error']).toBe(true);
+    expect(installStep?.uses).toBe('./.review-tooling/.github/actions/install_review_cli');
 
     expect(noteUnavailableStep).toBeDefined();
+    expect(noteUnavailableStep?.if).toContain("env.HAS_REVIEW_CLI_TOKEN == 'true'");
     expect(noteUnavailableStep?.if).toContain("steps.install-review-cli.outcome != 'success'");
-    expect(noteUnavailableStep?.if).toContain("steps.install-review-cli.outputs.bin-path == ''");
   });
 
   it('treats GitHub Packages access failures as a skip in the installer action', () => {
@@ -51,14 +54,20 @@ describe('Claude Code Review workflow regression checks', () => {
     const script = installStep?.run ?? '';
 
     expect(installStep).toBeDefined();
-    expect(script).toContain('if bun add "@uniswap/review-cli@${REVIEW_CLI_VERSION}"; then');
+    expect(script).toContain('bun_add_log="$install_dir/bun-add.log"');
+    expect(script).toContain(
+      'if bun add "@uniswap/review-cli@${REVIEW_CLI_VERSION}" 2>&1 | tee "$bun_add_log"; then'
+    );
     expect(script).toContain('package_dir="$install_dir/node_modules/@uniswap/review-cli"');
     expect(script).toContain('bin_path="$install_dir/node_modules/.bin/review-cli"');
     expect(script).toMatch(
-      /if bun add "@uniswap\/review-cli@\$\{REVIEW_CLI_VERSION\}"; then[\s\S]*else[\s\S]*echo "::warning::Unable to access @uniswap\/review-cli from GitHub Packages; continuing without AI review\."[\s\S]*exit 0[\s\S]*fi/
+      /else[\s\S]*grep -Eq 'error: GET https:\/\/npm\\.pkg\\.github\\.com\/@uniswap%2freview-cli - 40\[13\]' "\$bun_add_log"[\s\S]*echo "::warning::Unable to access @uniswap\/review-cli from GitHub Packages; continuing without AI review\."[\s\S]*exit 0[\s\S]*echo "::error::Unable to access @uniswap\/review-cli from GitHub Packages\."[\s\S]*exit 1[\s\S]*fi/
     );
     expect(script).toMatch(
-      /if \[ ! -d "\$package_dir" \]; then[\s\S]*echo "::warning::Unable to access @uniswap\/review-cli from GitHub Packages; continuing without AI review\."[\s\S]*exit 0[\s\S]*fi/
+      /if \[ ! -d "\$package_dir" \]; then[\s\S]*grep -Eq 'error: GET https:\/\/npm\\.pkg\\.github\\.com\/@uniswap%2freview-cli - 40\[13\]' "\$bun_add_log"[\s\S]*echo "::warning::Unable to access @uniswap\/review-cli from GitHub Packages; continuing without AI review\."[\s\S]*exit 0[\s\S]*echo "::error::Unable to access @uniswap\/review-cli from GitHub Packages\."[\s\S]*exit 1[\s\S]*fi/
+    );
+    expect(script).toMatch(
+      /if grep -Eq 'error: GET https:\/\/npm\\.pkg\\.github\\.com\/@uniswap%2freview-cli - 40\[13\]' "\$bun_add_log"; then[\s\S]*echo "::warning::Unable to access @uniswap\/review-cli from GitHub Packages; continuing without AI review\."[\s\S]*exit 0[\s\S]*fi/
     );
     expect(script).toMatch(
       /if \[ ! -x "\$bin_path" \]; then[\s\S]*echo "::error::bun add installed \$package_dir but \$bin_path is missing or not executable"[\s\S]*exit 1/
