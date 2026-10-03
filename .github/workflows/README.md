@@ -32,10 +32,16 @@ Workflows that run automated checks on pull requests and commits.
   - Skips safely when neither Claude credential is configured
 
 - **claude-welcome.yml**:
+
   - Uses the reusable `_claude-welcome.yml` workflow
   - Customized welcome message for AI Toolkit development
   - Links to Claude package documentation
   - 3-month expiration period
+
+- **claude-docs-check.yml**:
+
+  - Validates documentation and plugin version updates on same-repository PRs
+  - Supports API-key or OAuth-token Claude authentication
 
 ---
 
@@ -214,8 +220,8 @@ The [Claude GitHub App](https://github.com/apps/claude) must be installed on you
 | Secret                             | Used By                                                                            | Purpose                                                                                                                                         |
 | ---------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `WORKFLOW_PAT`                     | publish-packages.yml, release-update-production.yml, update-claude-code-action.yml | Push commits/tags, create PRs (internal CI/CD only). The Claude Code Action updater skips PR creation when this secret is missing or blank.     |
-| `ANTHROPIC_API_KEY`                | claude-docs-check.yml, generate-changelog.yml, generate-pr-title-description.yml   | Claude authentication for AI-powered workflows                                                                                                  |
-| `CLAUDE_CODE_OAUTH_TOKEN`          | claude-docs-check.yml, generate-pr-title-description.yml                           | Alternative Claude authentication                                                                                                               |
+| `ANTHROPIC_API_KEY`                | generate-changelog.yml, claude-docs-check.yml, generate-pr-title-description.yml   | AI-powered changelog generation, documentation checks, and PR metadata generation                                                               |
+| `CLAUDE_CODE_OAUTH_TOKEN`          | claude-docs-check.yml, generate-pr-title-description.yml                           | Alternative Claude authentication for documentation checks and PR metadata generation                                                          |
 | `SLACK_WEBHOOK_URL`                | notify-release.yml, publish-packages.yml                                           | Send Slack release and error notifications                                                                                                      |
 | `NOTION_API_KEY`                   | notify-release.yml                                                                 | Publish release notes to Notion (optional)                                                                                                      |
 | `RELEASE_NOTES_NOTION_DATABASE_ID` | notify-release.yml                                                                 | Notion database ID for release notes (optional)                                                                                                 |
