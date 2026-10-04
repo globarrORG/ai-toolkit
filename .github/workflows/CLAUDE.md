@@ -26,7 +26,7 @@ Contains GitHub Actions workflow definitions that automate CI/CD, code quality, 
 
 ### PR Title Validation (1 workflow)
 
-- `ci-check-pr-title.yml` - Validates PR titles follow conventional commit format
+- `ci-check-pr-title.yml` - Validates PR titles follow conventional commit format and skips semantic checks for automated PRs plus `copilot/*` branches via `check-automated-pr`
 
 ### Dependency Management (3 workflows)
 
@@ -89,9 +89,12 @@ You can authenticate with Claude using either method:
 1. **API Key (Traditional):** Set `ANTHROPIC_API_KEY` with your Anthropic API key
 2. **OAuth Token (Pro/Max Users):** Set `CLAUDE_CODE_OAUTH_TOKEN` with a token generated via `claude setup-token`
 
-If both are provided, OAuth token takes precedence. At least one authentication method
-must be configured. The bundled `claude-docs-check.yml` workflow skips validation cleanly
-when neither secret is configured.
+If both are provided, OAuth token takes precedence.
+At least one authentication method must be configured.
+
+The top-level `claude-docs-check.yml` caller performs a preflight check and skips validation with a notice when neither secret is configured. Direct callers of `_claude-docs-check.yml` must still pass at least one credential.
+
+The top-level `generate-pr-title-description.yml` caller skips metadata generation when neither authentication secret is configured.
 
 > **Important:** The [Claude GitHub App](https://github.com/apps/claude) must be installed on your repository for these workflows to function. This is required by Anthropic's official Claude Code GitHub Action.
 
@@ -544,7 +547,9 @@ The step ends by asserting `git status --porcelain` is empty and warns if it is 
 
 **A second-order consequence of making that work, accepted deliberately.** review-cli's post-synthesis `verifyFindings` pass is gated on `workspaceShape == 'working-tree'`, so it was effectively dead in this repo's CI while the tree was always dirty. With the tree clean it runs, and it resolves cited files from the workspace — where `.claude` is now the pre-PR copy. On a PR that _adds_ a `.claude/**` file, a finding against that file is dropped as "file not readable at HEAD"; on one that lengthens a file, a finding past the trusted copy's EOF is dropped as "beyond file end". Both drops are logged rather than silent, and only reviewer-tuning PRs can reach them. Do not "fix" this by skipping the swap: that hands config and agent prompts back to the PR author, which is the trust inversion the swap exists to close. A real carve-out needs an upstream change.
 
-**Steps that shell out to the CLI are gated on `steps.install-review-cli.outputs.bin-path != ''`.** That output is empty whenever the install step never ran, which is exactly what happens when an earlier step fails. Without the gate, `Post` and the reaction/reply steps still execute, resolve `"$REVIEW_CLI_BIN/review-cli"` to `/review-cli`, and fail with exit 127 — replacing the real error in the log with a meaningless one.
+**Steps that shell out to the CLI are gated on `steps.install-review-cli.outputs.bin-path != ''`.** That output is empty whenever the install step never ran and also when `install_review_cli` intentionally skips on GitHub Packages auth failures (401/403 downloading `@uniswap/review-cli`). Without the gate, later steps resolve `"$REVIEW_CLI_BIN/review-cli"` to `/review-cli` and fail with exit 127 — replacing the real error in the log with a meaningless one.
+
+The auth-failure detector in `install_review_cli` uses `grep -E`; keep the match as plain `(401|403)` near the registry/package tokens. `\b` is not a word-boundary token in POSIX ERE and can miss real 401/403 failures.
 
 **Gotcha — the `triage` gate must read `.claude/review.yml`.** review-cli's upstream workflow template runs the gate with `--skip-config` to avoid a checkout. Do not copy that here. `--skip-config` passes **no** policy, which is not the same as "the CLI's built-in defaults":
 
@@ -553,17 +558,19 @@ The step ends by asserting `git status --porcelain` is empty and warns if it is 
 
 So the `triage` job sparsely checks out `.claude` from the event ref and `install_review_cli` separately from the trusted default ref, then runs the gate **without** `--skip-config`. A `Verify review config is present` step fails the job if `.claude/review.yml` is missing, because `loadConfig` treats a missing file as "use defaults" and logs nothing — a botched checkout would otherwise silently stop reviewing dependency PRs, breaking auto-merge on a green run.
 
+**Gotcha — triage treats `review-cli` install failures as a skip, not a hard failure.** This repository depends on a private `@uniswap/review-cli` package from GitHub Packages. Forks and personal copies of the repo often have a `GITHUB_TOKEN` that can run the workflow but cannot read that package, which surfaces as a 403 during the install step. The triage job therefore marks the install step `continue-on-error`, emits a notice explaining that AI review was skipped because the package was unavailable, and gates both config validation and `review-cli triage` itself on `steps.install-review-cli.outcome == 'success'`. That keeps the workflow green while still leaving an explicit audit trail in the run log.
+
 **Configuration lives in the repo, not in workflow inputs:**
 
-| File / setting                       | Controls                                                                                                                                                                                                                                                                        |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.claude/review.yml`                 | Model, per-agent budget, skip policy, investigation gate, diff summarization, triage staffing                                                                                                                                                                                   |
-| `.claude/agents/*-reviewer.md`       | Repo-specific reviewers, **added to** review-cli's bundled set (not replacing it)                                                                                                                                                                                               |
-| `.github/actions/install_review_cli` | Installs the CLI from GitHub Packages into an isolated `$RUNNER_TEMP` dir. In the `review` job it is resolved from the trusted ref, not the PR head                                                                                                                             |
-| `vars.REVIEW_CLI_VERSION`            | CLI version override; falls back to the pin in the workflow. Never `@latest`                                                                                                                                                                                                    |
+| File / setting                       | Controls                                                                                                                                                                                                    |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.claude/review.yml`                 | Model, per-agent budget, skip policy, investigation gate, diff summarization, triage staffing                                                                                                               |
+| `.claude/agents/*-reviewer.md`       | Repo-specific reviewers, **added to** review-cli's bundled set (not replacing it)                                                                                                                           |
+| `.github/actions/install_review_cli` | Installs the CLI from GitHub Packages into an isolated `$RUNNER_TEMP` dir. In the `review` job it is resolved from the trusted ref, not the PR head                                                         |
+| `vars.REVIEW_CLI_VERSION`            | CLI version override; falls back to the pin in the workflow. Never `@latest`                                                                                                                                |
 | `secrets.REVIEW_CLI_TOKEN`           | Optional. A token with `packages:read` access. When unset, triage reports a notice and skips AI review; when configured but package access is unavailable, triage continues with a notice and skips review. |
-| `secrets.CLAUDE_CODE_OAUTH_TOKEN`    | **Required.** `ANTHROPIC_API_KEY` is deliberately never forwarded to the review job                                                                                                                                                                                             |
-| `secrets.DATADOG_API_KEY`            | Optional. Enables CI Visibility stamping; the step is skipped when unset                                                                                                                                                                                                        |
+| `secrets.CLAUDE_CODE_OAUTH_TOKEN`    | **Required.** `ANTHROPIC_API_KEY` is deliberately never forwarded to the review job                                                                                                                         |
+| `secrets.DATADOG_API_KEY`            | Optional. Enables CI Visibility stamping; the step is skipped when unset                                                                                                                                    |
 
 **Repo-specific reviewers.** review-cli ships 11 bundled agents: security, correctness, patterns, dependency-upgrade, and general reviewers; contract-security and defi-risk reviewers (neither applicable here, see `triage.guidance`); stack-security-analyst and stack-synthesis for stacked PRs; plus triage and synthesis. ai-toolkit adds two:
 
@@ -578,7 +585,7 @@ So the `triage` job sparsely checks out `.claude` from the event ref and `instal
 
 Do **not** "fix" this by widening `Post` to `always()`. Cancellation is also how the `concurrency` group stops a superseded run, and an `always()` Post would let that dying run overwrite the sticky its successor is mid-way through writing.
 
-**Why `install_review_cli` needs an isolated directory:** the repo's `bunfig.toml` pins the whole `@uniswap` scope to `registry.npmjs.org`, but `@uniswap/review-cli` is private on GitHub Packages, and bun only supports per-_scope_ registry overrides. The same file also enforces a 3-day `minimumReleaseAge` as a supply-chain control. That age gate applies to exact version requests too, so a review-cli version published less than 3 days ago is uninstallable until it ages in (bun errors rather than downgrading; an exact pin bypasses the stability-check fallback). Installing from a scratch dir with its own `bunfig.toml` sidesteps both without touching the repo's copy.
+**Why `install_review_cli` needs an isolated directory:** the repo's `bunfig.toml` pins the whole `@uniswap` scope to `registry.npmjs.org`, but `@uniswap/review-cli` is private on GitHub Packages, and bun only supports per-_scope_ registry overrides. The same file also enforces a 3-day `minimumReleaseAge` as a supply-chain control. That age gate applies to exact version requests too, so a review-cli version published less than 3 days ago is uninstallable until it ages in (bun errors rather than downgrading; an exact pin bypasses the stability-check fallback). Installing from a scratch dir with its own `bunfig.toml` sidesteps both without touching the repo's copy. The action also repairs a missing `node_modules/.bin/review-cli` shim from the installed package metadata, because some Bun installs leave the package present but never link the executable.
 
 **Package authentication:** `GITHUB_TOKEN` cannot read the private
 `@uniswap/review-cli` package. Configure `REVIEW_CLI_TOKEN` with `packages:read`;
@@ -606,6 +613,8 @@ Comment triggers are restricted to `OWNER`, `MEMBER`, and `COLLABORATOR` associa
 
 This workflow validates that PR documentation is properly updated based on code changes. It checks CLAUDE.md files, README files, and plugin version bumps.
 
+`claude-docs-check.yml` (the top-level caller in this repo) now performs a `check-authentication` preflight job and only invokes this reusable workflow when at least one Claude credential is configured. This prevents missing-secret runs from failing in `validate-claude-auth`; it also forwards both `ANTHROPIC_API_KEY` and `CLAUDE_CODE_OAUTH_TOKEN` so either auth mode works.
+
 **Key Features:**
 
 | Feature                     | Description                                                                          |
@@ -619,6 +628,8 @@ This workflow validates that PR documentation is properly updated based on code 
 | **Pass/Fail Verdict**       | Returns clear pass/fail status for CI integration                                    |
 | **Auto-Fix Mode**           | Optionally auto-fix documentation issues and push changes (triggers re-check)        |
 | **Dual Authentication**     | Supports both API key and OAuth token authentication; skips if neither is configured |
+
+The top-level caller workflow (`claude-docs-check.yml`) now runs a `check-authentication` preflight job and only invokes this reusable workflow when either `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` is present. This prevents missing-auth configuration from surfacing as a failing CI job.
 
 **Suggestion Modes:**
 
@@ -652,6 +663,8 @@ You can authenticate with Claude using either method:
 2. **OAuth Token (Pro/Max Users):** Set `CLAUDE_CODE_OAUTH_TOKEN` with a token generated via `claude setup-token`
 
 If both are provided, OAuth token takes precedence. The top-level caller runs a `check-authentication` preflight, forwards both secrets to `_claude-docs-check.yml`, and skips validation successfully when neither credential is configured.
+
+The repository's top-level `claude-docs-check.yml` caller skips the reusable workflow when neither authentication secret is configured.
 
 > **Important:** The [Claude GitHub App](https://github.com/apps/claude) must be installed on your repository for these workflows to function. This is required by Anthropic's official Claude Code GitHub Action.
 
@@ -785,7 +798,11 @@ The workflow uploads artifacts for debugging (retained for 7 days):
 
 ### PR Metadata Generation (`_generate-pr-metadata.yml`)
 
+**Caller-side auth gate:** `generate-pr-title-description.yml` runs a `check-auth` job before calling this reusable workflow. `validate-claude-auth` (used inside `_generate-pr-metadata.yml`) hard-fails the job when neither `ANTHROPIC_API_KEY` nor `CLAUDE_CODE_OAUTH_TOKEN` is configured, and a reusable workflow's inputs/secrets aren't visible to the caller's job-level `if:` (no `secrets` context there). `check-auth` checks secret presence itself and exposes `has_auth`, so `generate-metadata` only runs `_generate-pr-metadata.yml` when `needs.check-auth.outputs.has_auth == 'true'` — repos/forks without those secrets skip gracefully instead of failing on every PR.
+
 This workflow generates PR titles and descriptions using Claude AI with the following features:
+
+When neither Claude authentication secret is available, its preflight job completes successfully and skips metadata generation. This lets repositories adopt the workflow before configuring `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` without failing pull requests.
 
 **Content Preservation with Markers:**
 
@@ -861,8 +878,8 @@ The `generation_mode` input is a comma-separated list that controls what the wor
 
 | Secret                    | Required                                      | Description                                                                                                                               |
 | ------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`       | Yes (unless `CLAUDE_CODE_OAUTH_TOKEN` is set) | Anthropic API key for Claude access                                                                                                       |
-| `CLAUDE_CODE_OAUTH_TOKEN` | No (alternative to `ANTHROPIC_API_KEY`)       | Claude Code OAuth token for authentication. When provided, takes precedence over `ANTHROPIC_API_KEY`. Generate with `claude setup-token`. |
+| `ANTHROPIC_API_KEY`       | No                                            | Anthropic API key for Claude access                                                                                                       |
+| `CLAUDE_CODE_OAUTH_TOKEN` | No                                            | Claude Code OAuth token for authentication. When provided, takes precedence over `ANTHROPIC_API_KEY`. Generate with `claude setup-token`. |
 
 **Authentication Methods:**
 
@@ -871,7 +888,9 @@ You can authenticate with Claude using either method:
 1. **API Key (Traditional):** Set `ANTHROPIC_API_KEY` with your Anthropic API key
 2. **OAuth Token (Pro/Max Users):** Set `CLAUDE_CODE_OAUTH_TOKEN` with a token generated via `claude setup-token`
 
-If both are provided, OAuth token takes precedence. At least one authentication method must be configured.
+If both are provided, OAuth token takes precedence.
+
+If neither secret is configured, `_generate-pr-metadata.yml` exits successfully with a notice and skips generation instead of failing the workflow. This keeps caller workflows green for missing-config cases such as forks or repositories that have not provisioned Claude credentials yet.
 
 > **Important:** The [Claude GitHub App](https://github.com/apps/claude) must be installed on your repository for these workflows to function. This is required by Anthropic's official Claude Code GitHub Action.
 >
@@ -880,11 +899,15 @@ If both are provided, OAuth token takes precedence. At least one authentication 
 > **Required permissions:** The caller workflow must include `id-token: write` permission (needed by Claude Code Action for ID token creation):
 >
 > ```yaml
-> permissions:
->   contents: read
->   pull-requests: write
->   id-token: write
+> jobs:
+>   generate-metadata:
+>     permissions:
+>       contents: read
+>       pull-requests: write
+>       id-token: write
 > ```
+>
+> If the caller has helper jobs that do not need elevated permissions, grant these on the specific reusable-workflow calling job instead of at the workflow root.
 
 **Usage example (API Key):**
 
@@ -1391,6 +1414,8 @@ Never use tags or branch names directly.
 ### Bullfrog Security Scanning (CRITICAL)
 
 **Every job running on non-macOS runners MUST have `bullfrogsec/bullfrog` as the FIRST step** - no exceptions.
+
+Codacy and CodeQL use audit mode; CodeQL skips Bullfrog for its macOS Swift runner. Both retain SHA-pinned actions and disable checkout credential persistence.
 
 This applies to ALL jobs, including:
 

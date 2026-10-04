@@ -61,6 +61,8 @@ jobs:
     - name: Bullfrog
       uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
       if: matrix.language != 'swift'
+      with:
+        egress-policy: audit
 
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
