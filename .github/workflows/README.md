@@ -32,10 +32,16 @@ Workflows that run automated checks on pull requests and commits.
   - Skips safely when neither Claude credential is configured
 
 - **claude-welcome.yml**:
+
   - Uses the reusable `_claude-welcome.yml` workflow
   - Customized welcome message for AI Toolkit development
   - Links to Claude package documentation
   - 3-month expiration period
+
+- **claude-docs-check.yml**:
+
+  - Validates documentation and plugin version updates on same-repository PRs
+  - Supports API-key or OAuth-token Claude authentication
 
 ---
 
@@ -211,16 +217,22 @@ The [Claude GitHub App](https://github.com/apps/claude) must be installed on you
 
 ### Required Secrets
 
-| Secret                             | Used By                                                                            | Purpose                                                                                                                                     |
-| ---------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WORKFLOW_PAT`                     | publish-packages.yml, release-update-production.yml, update-claude-code-action.yml | Push commits/tags, create PRs (internal CI/CD only). The Claude Code Action updater skips PR creation when this secret is missing or blank. |
-| `ANTHROPIC_API_KEY`                | generate-changelog.yml                                                             | AI-powered changelog generation                                                                                                             |
-| `SLACK_WEBHOOK_URL`                | notify-release.yml, publish-packages.yml                                           | Send Slack release and error notifications                                                                                                  |
-| `NOTION_API_KEY`                   | notify-release.yml                                                                 | Publish release notes to Notion (optional)                                                                                                  |
-| `RELEASE_NOTES_NOTION_DATABASE_ID` | notify-release.yml                                                                 | Notion database ID for release notes (optional)                                                                                             |
-| `NODE_AUTH_TOKEN`                  | publish-packages.yml                                                               | Publish to NPM registry                                                                                                                     |
+| Secret                             | Used By                                                                            | Purpose                                                                                                                                         |
+| ---------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WORKFLOW_PAT`                     | publish-packages.yml, release-update-production.yml, update-claude-code-action.yml | Push commits/tags, create PRs (internal CI/CD only). The Claude Code Action updater skips PR creation when this secret is missing or blank.     |
+| `ANTHROPIC_API_KEY`                | generate-changelog.yml, claude-docs-check.yml                                      | AI-powered changelog generation and documentation checks                                                                                       |
+| `CLAUDE_CODE_OAUTH_TOKEN`          | claude-docs-check.yml                                                              | Alternative Claude authentication for documentation checks                                                                                      |
+| `SLACK_WEBHOOK_URL`                | notify-release.yml, publish-packages.yml                                           | Send Slack release and error notifications                                                                                                      |
+| `NOTION_API_KEY`                   | notify-release.yml                                                                 | Publish release notes to Notion (optional)                                                                                                      |
+| `RELEASE_NOTES_NOTION_DATABASE_ID` | notify-release.yml                                                                 | Notion database ID for release notes (optional)                                                                                                 |
+| `REVIEW_CLI_TOKEN`                 | claude-code-review.yml                                                             | Optional GitHub Packages token for `@uniswap/review-cli` (`packages:read`). When absent or unable to read the package, AI review skips cleanly. |
+| `NODE_AUTH_TOKEN`                  | publish-packages.yml                                                               | Publish to NPM registry                                                                                                                         |
 
 > **Note:** External consumers of the reusable workflows (e.g., `_claude-code-review.yml`, `_generate-pr-metadata.yml`) do **not** need `WORKFLOW_PAT`. The ai-toolkit repository is public, so fetching default prompts requires no authentication.
+>
+> **Note:** `_generate-pr-metadata.yml` requires either `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` to actually generate PR metadata, but it now skips cleanly with a notice when neither credential is configured.
+
+> **Note:** The `generate-pr-title-description.yml` caller skips metadata generation when neither `ANTHROPIC_API_KEY` nor `CLAUDE_CODE_OAUTH_TOKEN` is configured.
 
 ## Usage Examples
 
