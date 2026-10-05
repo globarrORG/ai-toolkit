@@ -25,7 +25,7 @@ Contains GitHub Actions workflow definitions that automate CI/CD, code quality, 
 
 ### PR Title Validation (1 workflow)
 
-- `ci-check-pr-title.yml` - Validates PR titles follow conventional commit format
+- `ci-check-pr-title.yml` - Validates conventional PR titles; skips Copilot branches using the PR head ref from the event payload
 
 ### Dependency Management (2 workflows)
 
