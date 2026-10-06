@@ -8,9 +8,9 @@ describe('PR title workflow regression checks', () => {
   it('classifies copilot branches as automated PRs', () => {
     const action = readFileSync(automatedPrActionPath, 'utf-8');
 
-    expect(action).toMatch(/elif \[\[ "\$BRANCH_NAME" == copilot\/\* \]\]; then/);
-    expect(action).toContain('IS_AUTOMATED="true"');
-    expect(action).toContain('CATEGORY="copilot"');
+    expect(action).toMatch(
+      /elif \[\[ "\$BRANCH_NAME" == copilot\/\* \]\]; then\s+IS_AUTOMATED="true"\s+SKIP_REASON="GitHub Copilot coding agent branch \(copilot\/\* prefix\)"\s+CATEGORY="copilot"/
+    );
   });
 
   it('skips semantic title validation for copilot branches', () => {
