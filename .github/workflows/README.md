@@ -220,7 +220,7 @@ The [Claude GitHub App](https://github.com/apps/claude) must be installed on you
 | Secret                             | Used By                                                                            | Purpose                                                                                                                                         |
 | ---------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `WORKFLOW_PAT`                     | publish-packages.yml, release-update-production.yml, update-claude-code-action.yml | Push commits/tags, create PRs (internal CI/CD only). The Claude Code Action updater skips PR creation when this secret is missing or blank.     |
-| `ANTHROPIC_API_KEY`                | generate-changelog.yml, claude-docs-check.yml                                      | AI-powered changelog generation and documentation checks                                                                                       |
+| `ANTHROPIC_API_KEY`                | generate-changelog.yml, claude-docs-check.yml                                      | AI-powered changelog generation and documentation checks                                                                                        |
 | `CLAUDE_CODE_OAUTH_TOKEN`          | claude-docs-check.yml                                                              | Alternative Claude authentication for documentation checks                                                                                      |
 | `SLACK_WEBHOOK_URL`                | notify-release.yml, publish-packages.yml                                           | Send Slack release and error notifications                                                                                                      |
 | `NOTION_API_KEY`                   | notify-release.yml                                                                 | Publish release notes to Notion (optional)                                                                                                      |
@@ -231,7 +231,7 @@ The [Claude GitHub App](https://github.com/apps/claude) must be installed on you
 > **Note:** External consumers of the reusable workflows (e.g., `_claude-code-review.yml`, `_generate-pr-metadata.yml`) do **not** need `WORKFLOW_PAT`. The ai-toolkit repository is public, so fetching default prompts requires no authentication.
 >
 > **Note:** `_generate-pr-metadata.yml` requires either `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` to actually generate PR metadata, but it now skips cleanly with a notice when neither credential is configured.
-
+>
 > **Note:** The `generate-pr-title-description.yml` caller skips metadata generation when neither `ANTHROPIC_API_KEY` nor `CLAUDE_CODE_OAUTH_TOKEN` is configured.
 
 ## Usage Examples
