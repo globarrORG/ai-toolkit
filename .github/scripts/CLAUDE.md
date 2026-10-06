@@ -110,10 +110,10 @@ npx nx test github-scripts --configuration=ci
 
 Tests are co-located with source files using the `.spec.ts` extension:
 
-| File                        | Tests                                                                                    |
-| --------------------------- | ---------------------------------------------------------------------------------------- |
-| `build-prompt.spec.ts`      | Template substitution, section ordering, overrides, conditional sections                 |
-| `ci-check-pr-title.spec.ts` | Regression coverage for Copilot-specific PR-title skips and normalized head-ref handling |
+| File                        | Tests                                                                                                          |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `build-prompt.spec.ts`      | Template substitution, section ordering, overrides, conditional sections                                       |
+| `ci-check-pr-title.spec.ts` | Regression coverage for Copilot-specific PR-title skips and PR head-ref fallback resolution                  |
 
 ### Test Patterns
 
