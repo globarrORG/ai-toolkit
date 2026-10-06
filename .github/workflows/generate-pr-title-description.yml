@@ -26,39 +26,43 @@ concurrency:
   group: pr-metadata-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-  pull-requests: write
-  id-token: write
+permissions: {}
 
 jobs:
-  # Checks whether Claude authentication is configured before invoking the
-  # reusable workflow. validate-claude-auth (called inside
-  # _generate-pr-metadata.yml) hard-fails the job when neither secret is set,
-  # which breaks this workflow on forks/repos that haven't configured Claude
-  # credentials. Computing this in its own job lets us skip generate-metadata
-  # gracefully via `needs.check-auth.outputs.has_auth` instead of failing.
+  # Cheap pre-check so environments without Claude credentials get a clean skip
+  # instead of the reusable workflow hard-failing when both secrets are absent.
+  # Secrets cannot be read in a job-level `if:`, so expose their presence via
+  # job-level env and an output instead.
   check-auth:
     runs-on: ubuntu-latest
     permissions: {}
     outputs:
-      has_auth: ${{ steps.check.outputs.has_auth }}
+      has_auth: ${{ steps.check-auth.outputs.has_auth }}
+    env:
+      HAS_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+      HAS_CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
     steps:
-      - name: Check for Claude authentication
-        id: check
-        env:
-          HAS_ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
-          HAS_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+      - name: Security scanning
+        uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
+        with:
+          egress-policy: block
+
+      - name: Check Claude authentication
+        id: check-auth
         run: |
-          if [ "$HAS_ANTHROPIC_KEY" = "true" ] || [ "$HAS_OAUTH_TOKEN" = "true" ]; then
+          if [[ "$HAS_ANTHROPIC_API_KEY" == "true" || "$HAS_CLAUDE_CODE_OAUTH_TOKEN" == "true" ]]; then
             echo "has_auth=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_auth=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping PR title/description generation: no Claude authentication configured (ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN)."
+            echo "::notice::Skipping PR title/description generation: neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN is configured for this repository."
           fi
 
   generate-metadata:
     needs: check-auth
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
     # Skip conditions:
     # - No Claude authentication configured (see check-auth job above)
     # - Merge queue PRs (handled separately)
