@@ -22,8 +22,7 @@ on:
   schedule:
     - cron: '28 17 * * 2'
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   codacy-security-scan:
@@ -36,6 +35,8 @@ jobs:
     steps:
       - name: Bullfrog
         uses: bullfrogsec/bullfrog@1831f79cce8ad602eef14d2163873f27081ebfb3 # v0.8.4
+        with:
+          egress-policy: audit
 
       # Checkout the repository to the GitHub Actions runner
       - name: Checkout code
