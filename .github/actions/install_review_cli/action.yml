@@ -13,7 +13,11 @@ inputs:
     description: '@uniswap/review-cli version to install (e.g. 1.10.1). Pin via vars.REVIEW_CLI_VERSION at the call site.'
     required: true
   github-token:
+<<<<<<< HEAD
+    description: 'Token with packages:read scope. Typically secrets.REVIEW_CLI_TOKEN.'
+=======
     description: 'Token with packages:read access to the private @uniswap/review-cli package (typically secrets.REVIEW_CLI_TOKEN).'
+>>>>>>> origin/next
     required: true
   bun-version:
     description: 'Bun runtime version. Must satisfy @uniswap/review-cli engines (>=1.3.13).'
@@ -75,6 +79,25 @@ runs:
         EOF
         cd "$install_dir"
         bun init -y > /dev/null
+<<<<<<< HEAD
+        if bun add "@uniswap/review-cli@${REVIEW_CLI_VERSION}"; then
+          :
+        else
+          echo "::warning::Unable to access @uniswap/review-cli from GitHub Packages; continuing without AI review."
+          exit 0
+        fi
+
+        package_dir="$install_dir/node_modules/@uniswap/review-cli"
+        bin_path="$install_dir/node_modules/.bin/review-cli"
+
+        # Bun can report the GitHub Packages 403 in stdout/stderr without
+        # tripping the `if ! bun add ...` guard above, leaving no installed
+        # package and no binary. Treat that the same as the direct failure
+        # path: warn and let callers skip AI review cleanly.
+        if [ ! -d "$package_dir" ]; then
+          echo "::warning::Unable to access @uniswap/review-cli from GitHub Packages; continuing without AI review."
+          exit 0
+=======
         install_log="$install_dir/bun-add.log"
         set +e
         bun add "@uniswap/review-cli@${REVIEW_CLI_VERSION}" 2>&1 | tee "$install_log"
@@ -169,6 +192,7 @@ runs:
         if [ ! -d "$package_dir" ]; then
           echo "::error::bun add completed but $package_dir is missing"
           exit 1
+>>>>>>> origin/next
         fi
 
         # Consumers gate on `bin-path != ''` to avoid resolving
@@ -176,10 +200,16 @@ runs:
         # That gate cannot catch a `bun add` that succeeds without linking the
         # shim (a future major renaming its `bin` key, or a bun bin-linking
         # change): bin-path would be non-empty and every gate would pass.
+<<<<<<< HEAD
+        # Verify the binary is actually there and executable.
+        if [ ! -x "$bin_path" ]; then
+          echo "::error::bun add installed $package_dir but $bin_path is missing or not executable"
+=======
         # Even after the recovery block above, fail closed if the shim still is
         # not there or not executable.
         if [ ! -x "$shim_path" ]; then
           echo "::error::bun add installed $package_dir but $shim_path is missing or not executable"
+>>>>>>> origin/next
           exit 1
         fi
         echo "bin-path=$(dirname "$shim_path")" >> "$GITHUB_OUTPUT"

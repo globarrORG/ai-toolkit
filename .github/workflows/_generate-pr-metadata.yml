@@ -175,8 +175,12 @@ jobs:
     permissions:
       contents: read
     outputs:
+<<<<<<< HEAD
+      has_auth: ${{ steps.check.outputs.has_auth }}
+=======
       is_authenticated: ${{ steps.authentication.outputs.is_authenticated }}
 
+>>>>>>> origin/next
     steps:
       # Security scanning — must be the first step in every non-macOS job.
       - name: Security Scan
@@ -193,6 +197,18 @@ jobs:
           enable-sudo: false
 
       - name: Check authentication availability
+<<<<<<< HEAD
+        id: check
+        env:
+          API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -n "$API_KEY" ] || [ -n "$OAUTH_TOKEN" ]; then
+            echo "has_auth=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_auth=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping PR metadata generation because no Claude authentication is configured."
+=======
         id: authentication
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -203,11 +219,16 @@ jobs:
           else
             echo "is_authenticated=false" >> "$GITHUB_OUTPUT"
             echo "Claude PR metadata generation skipped because no authentication secret is configured." >> "$GITHUB_STEP_SUMMARY"
+>>>>>>> origin/next
           fi
 
   generate-metadata:
     needs: check-authentication
+<<<<<<< HEAD
+    if: needs.check-authentication.outputs.has_auth == 'true'
+=======
     if: needs.check-authentication.outputs.is_authenticated == 'true'
+>>>>>>> origin/next
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.timeout_minutes }}
 
