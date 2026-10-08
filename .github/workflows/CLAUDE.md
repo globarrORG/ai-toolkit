@@ -22,11 +22,11 @@ Contains GitHub Actions workflow definitions that automate CI/CD, code quality, 
 - `claude-code.yml` - Responds to @claude mentions in issues and PRs
 - `claude-code-review.yml` - Automated PR code reviews for **this** repository, via `@uniswap/review-cli`. Does not call `_claude-code-review.yml` (see [PR Code Review for this repository](#pr-code-review-for-this-repository-claude-code-reviewyml))
 - `claude-docs-check.yml` - Validates PR documentation is properly updated (CLAUDE.md, README, versions), forwards either Claude auth secret to `_claude-docs-check.yml`, and uses a caller-side `check-authentication` preflight to skip early when neither auth secret is configured
-- `generate-pr-title-description.yml` - Auto-generates PR titles and descriptions using Claude
+- `generate-pr-title-description.yml` - Auto-generates PR titles and descriptions using Claude, and skips cleanly when neither Claude auth secret is configured
 
 ### PR Title Validation (1 workflow)
 
-- `ci-check-pr-title.yml` - Validates PR titles follow conventional commit format and skips semantic checks for automated PRs plus `copilot/*` branches via `check-automated-pr`
+- `ci-check-pr-title.yml` - Validates conventional PR titles; skips semantic checks for automated PRs and `copilot/*` branches using the PR head ref from the event payload
 
 ### Dependency Management (3 workflows)
 
@@ -568,7 +568,7 @@ So the `triage` job sparsely checks out `.claude` from the event ref and `instal
 | `.claude/agents/*-reviewer.md`       | Repo-specific reviewers, **added to** review-cli's bundled set (not replacing it)                                                                    |
 | `.github/actions/install_review_cli` | Installs the CLI from GitHub Packages into an isolated `$RUNNER_TEMP` dir. In the `review` job it is resolved from the trusted ref, not the PR head |
 | `vars.REVIEW_CLI_VERSION`            | CLI version override; falls back to the pin in the workflow. Never `@latest`                                                                         |
-| `secrets.REVIEW_CLI_TOKEN`           | **Required for AI review.** Token with `packages:read` access to `@uniswap/review-cli`; without it, AI review is skipped with a notice                 |
+| `secrets.REVIEW_CLI_TOKEN`           | **Required for AI review.** Token with `packages:read` access to `@uniswap/review-cli`; missing token or package access skips triage with a notice     |
 | `secrets.CLAUDE_CODE_OAUTH_TOKEN`    | **Required.** `ANTHROPIC_API_KEY` is deliberately never forwarded to the review job                                                                  |
 | `secrets.DATADOG_API_KEY`            | Optional. Enables CI Visibility stamping; the step is skipped when unset                                                                             |
 
@@ -662,9 +662,7 @@ You can authenticate with Claude using either method:
 1. **API Key (Traditional):** Set `ANTHROPIC_API_KEY` with your Anthropic API key
 2. **OAuth Token (Pro/Max Users):** Set `CLAUDE_CODE_OAUTH_TOKEN` with a token generated via `claude setup-token`
 
-If both are provided, OAuth token takes precedence. The top-level caller runs a `check-authentication` preflight, forwards both secrets to `_claude-docs-check.yml`, and skips validation successfully when neither credential is configured.
-
-The repository's top-level `claude-docs-check.yml` caller skips the reusable workflow when neither authentication secret is configured.
+If both are provided, OAuth token takes precedence. If neither is configured, this reusable workflow's own `check-authentication` preflight job detects this (via job env, since `jobs.<id>.if` cannot see the `secrets` context) and skips the `docs-check` job gracefully — the job is marked `skipped` rather than failing the run.
 
 > **Important:** The [Claude GitHub App](https://github.com/apps/claude) must be installed on your repository for these workflows to function. This is required by Anthropic's official Claude Code GitHub Action.
 
@@ -798,7 +796,7 @@ The workflow uploads artifacts for debugging (retained for 7 days):
 
 ### PR Metadata Generation (`_generate-pr-metadata.yml`)
 
-**Caller-side auth gate:** `generate-pr-title-description.yml` runs a `check-auth` job before calling this reusable workflow. `validate-claude-auth` (used inside `_generate-pr-metadata.yml`) hard-fails the job when neither `ANTHROPIC_API_KEY` nor `CLAUDE_CODE_OAUTH_TOKEN` is configured, and a reusable workflow's inputs/secrets aren't visible to the caller's job-level `if:` (no `secrets` context there). `check-auth` checks secret presence itself and exposes `has_auth`, so `generate-metadata` only runs `_generate-pr-metadata.yml` when `needs.check-auth.outputs.has_auth == 'true'` — repos/forks without those secrets skip gracefully instead of failing on every PR.
+**Caller-side auth gate:** `generate-pr-title-description.yml` runs a `check-auth` job before calling this reusable workflow. `validate-claude-auth` (used inside `_generate-pr-metadata.yml`) hard-fails the job when neither `ANTHROPIC_API_KEY` nor `CLAUDE_CODE_OAUTH_TOKEN` is configured, and a reusable workflow's inputs/secrets aren't visible to the caller's job-level `if:` (no `secrets` context there). `check-auth` checks secret presence itself and exposes `has_auth`, so `generate-metadata` only runs `_generate-pr-metadata.yml` when `needs.check-auth.outputs.has_auth == 'true'` — repos/forks without those secrets skip gracefully instead of failing on every PR. The caller keeps `contents: read` at workflow scope and grants `pull-requests: write` and `id-token: write` only to `generate-metadata`, so the auth check does not receive unnecessary write permissions.
 
 This workflow generates PR titles and descriptions using Claude AI with the following features:
 
