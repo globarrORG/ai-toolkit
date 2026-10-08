@@ -42,7 +42,7 @@ runs:
     #     Packages. Bun (like npm) only supports per-SCOPE registry
     #     overrides, never per-package, so there is no way to except a
     #     single package from that route.
-    #  2. minimumReleaseAge. The repo's bunfig.toml enforces a 3-day
+    #  2. minimumReleaseAge. The repo's bunfig.toml enforces a 4-day
     #     minimum release age as a supply-chain control, which would
     #     make a freshly published review-cli version uninstallable until
     #     it ages in. The gate applies to exact requests too, so bun errors
@@ -85,23 +85,19 @@ runs:
         bun add "@uniswap/review-cli@${REVIEW_CLI_VERSION}" 2>&1 | tee "$install_log"
         bun_add_status=${PIPESTATUS[0]}
         set -e
+        if grep -Eqi '((npm\.pkg\.github\.com|@uniswap(/|%2f)review-cli).*(401|403)|(401|403).*(npm\.pkg\.github\.com|@uniswap(/|%2f)review-cli))' "$install_log"; then
+          echo "::warning::Skipping AI review: unable to download @uniswap/review-cli from GitHub Packages with the provided token (401/403)."
+          echo "bin-path=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
         if [ "$bun_add_status" -ne 0 ]; then
-          if grep -Eqi '((npm\.pkg\.github\.com|@uniswap(/|%2f)review-cli).*(401|403)|(401|403).*(npm\.pkg\.github\.com|@uniswap(/|%2f)review-cli))' "$install_log"; then
-            echo "::warning::Skipping AI review: unable to download @uniswap/review-cli from GitHub Packages with the provided token (401/403)."
-            echo "bin-path=" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           exit "$bun_add_status"
         fi
 
         package_dir="$install_dir/node_modules/@uniswap/review-cli"
         shim_path="$install_dir/node_modules/.bin/review-cli"
         if [ ! -d "$package_dir" ]; then
-          if grep -Eqi '((npm\.pkg\.github\.com|@uniswap(/|%2f)review-cli).*(401|403)|(401|403).*(npm\.pkg\.github\.com|@uniswap(/|%2f)review-cli))' "$install_log"; then
-            echo "::warning::Skipping AI review: unable to download @uniswap/review-cli from GitHub Packages with the provided token (401/403)."
-            echo "bin-path=" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           echo "::error::bun add succeeded but $package_dir is missing"
           exit 1
         fi
@@ -116,11 +112,6 @@ runs:
         # shim. Recover from that by reading the package manifest and creating
         # a tiny wrapper ourselves rather than failing the whole workflow.
         if [ ! -x "$shim_path" ]; then
-          if grep -Eqi '((npm\.pkg\.github\.com|@uniswap(/|%2f)review-cli).*(401|403)|(401|403).*(npm\.pkg\.github\.com|@uniswap(/|%2f)review-cli))' "$install_log"; then
-            echo "::warning::Skipping AI review: unable to download @uniswap/review-cli from GitHub Packages with the provided token (401/403)."
-            echo "bin-path=" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           package_json="$package_dir/package.json"
           if [ ! -f "$package_json" ]; then
             echo "::error::bun add succeeded but $package_json is missing"
@@ -173,6 +164,16 @@ runs:
         EOF
           chmod +x "$shim_path"
           echo "::notice::Created $shim_path from @uniswap/review-cli package metadata because bun did not link the review-cli shim."
+        fi
+
+        if [ "$bun_add_status" -ne 0 ]; then
+          echo "::error::Unable to install @uniswap/review-cli."
+          exit 1
+        fi
+
+        if [ ! -d "$package_dir" ]; then
+          echo "::error::bun add completed but $package_dir is missing"
+          exit 1
         fi
 
         # Consumers gate on `bin-path != ''` to avoid resolving

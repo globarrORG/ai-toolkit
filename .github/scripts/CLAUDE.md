@@ -113,13 +113,13 @@ Tests are co-located with source files using the `.spec.ts` extension:
 | File                        | Tests                                                                                                          |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `build-prompt.spec.ts`      | Template substitution, section ordering, overrides, conditional sections                                       |
-| `ci-check-pr-title.spec.ts` | Regression coverage for Copilot branch detection, PR head-ref fallback resolution, and PR-title workflow skips |
+| `ci-check-pr-title.spec.ts` | Regression coverage for Copilot-specific PR-title skips and PR head-ref fallback resolution                  |
 
 ### Test Patterns
 
 - **Mocking**: Uses `memfs` to mock the filesystem
 - **Test Organization**: Tests are grouped by function/feature using `describe` blocks
-- **Coverage**: Includes workflow regression checks for `copilot/*` PR-title skip behavior alongside the prompt-builder tests
+- **Coverage**: Verifies Copilot branches are skipped only by PR-title validation, not classified as automated by the shared detector, alongside the prompt-builder tests
 
 ## Project Configuration
 
