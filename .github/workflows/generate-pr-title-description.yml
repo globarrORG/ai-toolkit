@@ -26,7 +26,8 @@ concurrency:
   group: pr-metadata-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   # Cheap pre-check so environments without Claude credentials get a clean skip
