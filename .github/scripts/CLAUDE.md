@@ -110,16 +110,28 @@ npx nx test github-scripts --configuration=ci
 
 Tests are co-located with source files using the `.spec.ts` extension:
 
+<<<<<<< HEAD
+| File                                | Tests                                                                                                          |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `build-prompt.spec.ts`              | Template substitution, section ordering, overrides, conditional sections                                       |
+| `ci-check-pr-title.spec.ts`         | Regression coverage for Copilot branch detection, PR head-ref fallback resolution, and PR-title workflow skips |
+| `update-claude-code-action.spec.ts` | Regression coverage for `WORKFLOW_PAT` gating in the scheduled Claude Code Action updater                      |
+=======
 | File                        | Tests                                                                                                          |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `build-prompt.spec.ts`      | Template substitution, section ordering, overrides, conditional sections                                       |
-| `ci-check-pr-title.spec.ts` | Regression coverage for Copilot branch detection, PR head-ref fallback resolution, and PR-title workflow skips |
+| `ci-check-pr-title.spec.ts` | Regression coverage for Copilot-specific PR-title skips and PR head-ref fallback resolution                  |
+>>>>>>> origin/next
 
 ### Test Patterns
 
 - **Mocking**: Uses `memfs` to mock the filesystem
 - **Test Organization**: Tests are grouped by function/feature using `describe` blocks
-- **Coverage**: Includes workflow regression checks for `copilot/*` PR-title skip behavior alongside the prompt-builder tests
+<<<<<<< HEAD
+- **Coverage**: Includes workflow regression checks for `copilot/*` PR-title skip behavior and `WORKFLOW_PAT`-gated updater behavior alongside the prompt-builder tests
+=======
+- **Coverage**: Verifies Copilot branches are skipped only by PR-title validation, not classified as automated by the shared detector, alongside the prompt-builder tests
+>>>>>>> origin/next
 
 ## Project Configuration
 
