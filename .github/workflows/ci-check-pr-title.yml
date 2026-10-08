@@ -53,16 +53,34 @@ jobs:
           pr_title: ${{ github.event.pull_request.title }}
 
       - name: Conditional semantic PR check
+<<<<<<< HEAD
         if: ${{ github.event_name == 'pull_request_target' && steps.check-automated.outputs.is_automated != 'true' && !startsWith(env.PR_HEAD_REF, 'copilot/') }}
+=======
+        if: >-
+          ${{
+            github.event_name == 'pull_request_target' &&
+            steps.check-automated.outputs.is_automated != 'true' &&
+            !startsWith(env.PR_HEAD_REF, 'copilot/')
+          }}
+>>>>>>> origin/next
         uses: amannn/action-semantic-pull-request@536f681e2c60d973396eb60457d42ced8cd3f61a
         with:
           requireScope: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+<<<<<<< HEAD
       - name: Pass check for automated PRs
         if: ${{ steps.check-automated.outputs.is_automated == 'true' || startsWith(env.PR_HEAD_REF, 'copilot/') }}
+=======
+      - name: Pass check for automated and Copilot PRs
+        if: >-
+          ${{
+            steps.check-automated.outputs.is_automated == 'true' ||
+            startsWith(env.PR_HEAD_REF, 'copilot/')
+          }}
+>>>>>>> origin/next
         env:
           SKIP_REASON: ${{ steps.check-automated.outputs.is_automated == 'true' && steps.check-automated.outputs.skip_reason || 'GitHub Copilot coding agent branch (copilot/* prefix); title is machine-generated from the task description' }}
         run: |
-          echo "Automated PR detected: $SKIP_REASON. This check is automatically passed."
+          echo "PR title validation skipped: ${SKIP_REASON:-Copilot-generated branch}."

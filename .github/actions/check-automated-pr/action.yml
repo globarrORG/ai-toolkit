@@ -75,11 +75,14 @@ runs:
           SKIP_REASON="Renovate dependency update branch (renovate/* prefix)"
           CATEGORY="deps"
 
+<<<<<<< HEAD
         # GitHub Copilot coding agent branches
         elif [[ "$BRANCH_NAME" == copilot/* ]]; then
           IS_AUTOMATED="true"
           SKIP_REASON="GitHub Copilot coding agent branch (copilot/* prefix)"
           CATEGORY="copilot"
+=======
+>>>>>>> origin/next
         fi
 
         # ===========================================
