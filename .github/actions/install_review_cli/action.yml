@@ -71,6 +71,11 @@ runs:
         REVIEW_CLI_VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
+        if [ -z "$GH_PACKAGES_TOKEN" ]; then
+          echo "::warning::Skipping AI review: REVIEW_CLI_TOKEN is not configured."
+          echo "bin-path=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
         install_dir="$RUNNER_TEMP/review-cli-install"
         mkdir -p "$install_dir"
         cat > "$install_dir/bunfig.toml" <<EOF
